@@ -1,0 +1,43 @@
+---
+id: home
+layout: site.njk
+title: Zig Utility Library
+eleventyExcludeFromCollections: true
+---
+{% block head %}
+<style>
+#home .api {display: flex; border-top: 1px solid #ddd; padding: 20px 0}
+#home .api p {margin: 2px 0 0}
+#home .api > div {width: 500px;}
+#home .api > a{margin-left: auto; padding: 4px; border: 1px solid #ddd;border-radius:4px;display:inline-block;padding: 5px 10px;align-self:flex-start}
+#home .api > a:hover{background:#ff40ae;color:#fff;text-decoration: none}
+#home .api code, p code, li code, aside code {padding: 0px 3px;border-radius: 4px;background: #f7fafc; border: 1px solid rgba(0, 0, 0, 0.05)}
+</style>
+{% endblock %}
+<h1>Zig Utility Library</h1>
+<p>The purpose of this library is to enhance Zig's standard library. Much of zul wraps Zig's std to provide simpler APIs for common tasks (e.g. reading lines from a file). In other cases, new functionality has been added (e.g. a UUID type). While we may introduce breaking changes, our higher level abstractions can hopefully shield users from some of Zig's constant changes.</p>
+
+{%- for post in collections.all %}
+{%- set meta = postMeta(post) -%}
+<div class=api>
+	<div>
+		<code>{{ post.data.title }}</code>
+		<p>{{ meta.desc }}</p>
+	</div>
+	<a href="{{post.url}}#example">example</a>
+	<a href="{{post.url}}">docs</a>
+</div>
+<div class=example style=display:none>{{ meta.example | safe }}</div>
+{%- endfor -%}
+
+<script>
+let links = document.querySelectorAll('.api > a:first-of-type');
+for (let i = 0; i < links.length; ++i) {
+	links[i].addEventListener('click', function(e) {
+		const example = this.closest('.api').nextElementSibling;
+		example.style.display = example.style.display == 'none' ? 'block' : 'none';
+		e.preventDefault();
+		e.stopPropagation();
+	});
+};
+</script>

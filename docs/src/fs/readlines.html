@@ -1,0 +1,100 @@
+---
+layout: site.njk
+title: zul.fs.readLines
+---
+
+<h1 id=zul.fs.readlines><a href=#zul.fs.readlines aria-hidden=true>zul.fs.readlines</a></h1>
+<p>Iterate over the lines in a file. this is much longer but let's hope it works</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// create a buffer large enough to hold the longest valid line
+var line_buffer: [1024]u8 = undefined;
+
+// Parameters:
+// 1- an absolute or relative path to the file
+// 2- the line buffer
+// 3- options (here we're using the default)
+var it = try zul.fs.readlines("/tmp/data.txt", &line_buffer, .{});
+defer it.deinit();
+
+while (it.next()) |line| {
+	// line is only valid until the next call to it.next or it.deinit
+	std.debug.print("line: {s}\n", .{line});
+}
+
+// At the end of the file, and on error, next() will return null
+// We must check it.err() to see if an error was encountered.
+// This approach makes it easier to catch the error compared
+// to having to do it on the call to next().
+try it.err();
+{% endhighlight %}
+
+<h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
+<div>
+	<div class=member>
+		<code class=sig id=v4>path: []const u8</code>
+		<div class=desc><p>Absolute or relative path to the file.</p></div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>buf: []const u8</code>
+		<div class=desc><p>Buffer to write the line into, the buffer length represents the maximum allowed line. If a line is longer than <code>buf.len</code> <code><a href="#next">next()</a></code> returning <code>null</code> and <code><a href="#err">err()</a></code> will return <code>error.StreamTooLong</code>.</p></div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>opts: zul.fs.LineIterator.Opts</code>
+		<div class=desc>
+			<p>Options that control the iterator.</p>
+			<ul>
+				<li><code>delimiter: u8</code> - The delimiter to split on, defaults to <code>'\n'</code>
+				<li><code>open_flags: std.fs.File.OpenFlags</code> - Flags to pass to the underlying std <code>openFile</code> call.
+			</ul>
+		</div>
+	</div>
+</div>
+
+<h2 id=LineIterator><a href=#LineIterator aria-hidden=true>LineIterator struct</a></h2>
+<p>On success, <code>readLines</code> returns this a <code>LineIterator</code>.</p>
+
+<h3 id=LineIterator.methods><a href=#LineIterator.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=sig id=LineIterator.deinit><a href=#LineIterator.deinit aria-hidden=true>deinit(self: LineIterator)</a></code>
+		<div class=desc>
+			<p>Releases the resources associated with the iterator (i.e.it closes the file). This must be called the the iterator is no longer needed.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=LineIterator.next><a href=#LineIterator.next aria-hidden=true>next(self: LineIterator) ?[]u8</a></code>
+		<div class=desc>
+			<p>Returns the next line, or <code>null</code> if the the end of the file has been reached or if an error was encountered. The value returned is only valid until the next call to <code>next</code> or <code>deinit</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=LineIterator.err><a href=#LineIterator.err aria-hidden=true>err(self: LineIterator) anyerror!void</a></code>
+		<div class=desc>
+			<p>Set if an error was encountered by <code>next()</code>. See <a href=#note2>note 2</a> for an explanation on this non-idiomatic pattern.</p>
+	</div>
+</div>
+
+<h2 id=note1><a href=#note1 aria-hidden=true>Note 1 - Performance</a></h2>
+<p>Due to <a href="https://github.com/ziglang/zig/issues/17985">issue 17985</a>, <code>readLines</code> should performance considerably better than the typical std solution involving a <code>std.io.File</code> wrapped in a <code>std.io.BufferedReader</code> exposed as an <code>std.io.Reader</code>.</p>
+
+<h2 id=note2><a href=#note2 aria-hidden=true>Note 2 - Error Handling</a></h2>
+<p>The iterator's error handling is slightly unconventional: <code>it.next()</code> returns <code>null</code> when the end of the file is reached or an error is encountered. As shown in the above example, the caller should always check <code>it.err()</code> after iterating. This approach makes it simpler to handle the error. It's true that the following is more idiomatic:</p>
+
+{% highlight zig %}
+// note the "try"
+while (try it.next()) |line| { ... } 
+{% endhighlight %}
+
+<p>But if you want to actually catch/handle the error, the above becomes awkward.</p>
+
+
+<h2 id=note3><a href=#note3 aria-hidden=true>Note 3 - Buffer Size</a></h2>
+<p>By default, <code>readLines</code> will read from the file using a 4096 byte buffer. A different size can be specified via the <code>readLinesSize</code> function:</p>
+
+{% highlight zig %}
+var it = try zul.fs.readlinesSized(8192, "/tmp/data.txt", &line_buffer, .{});
+{% endhighlight %}
+
+<p>The size must be comptime-known (i.e, a constant). The rest of the API is exactly the same.</p>

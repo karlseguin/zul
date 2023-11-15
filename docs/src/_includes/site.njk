@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name=viewport content="width=device-width">
+<title>{{ title }}</title>
+<link rel=icon type=image/png href="{{ 'favicon.png' | asset_url}}">
+<style>
+* {margin: 0; padding: 0; }
+*, *:before, *:after {box-sizing: border-box}
+body {color: #333;background: #fff;font: 18px "Helvetica Neue", sans-serif}
+a{color:#ff40ae;text-decoration: none}
+a:hover{text-decoration: underline}
+p {margin-bottom: 16px;line-height: 26px}
+
+h1{font-size: 26px;margin: 30px 0 0}
+h2{font-size: 22px;margin: 30px 0 0}
+h3{font-size: 20px;margin: 10px 0 0}
+h1 a, h2 a, h3 a {color: #000; text-decoration: none;}
+h1 a:before, h2 a:before, h3 a:before {width: 1em; content: "§"; color: #999; display: none; text-decoration: none; margin-left: -1em;}
+h1 a:hover:before, h2 a:hover:before, h3 a:hover:before {display: inline-block;}
+
+ul{margin-left: 20px}
+li{margin: 10px 0}
+
+header {font-size: 95%; background: #f6f6f6; border-bottom: 1px solid #ddd}
+header ul{margin: 0 auto; max-width: 760px; list-style: none;	display: flex}
+header li{margin: 0}
+header li:last-of-type{margin-left: auto}
+header a{padding: 0 20px; display:block; line-height: 35px; color:#ff40ae}
+header a:hover{background: #ddd}
+main {width: 800px; margin: 20px auto}
+
+.member:first-of-type{margin-top:10px;}
+.member .sig{color: #333; display: block;border:0;padding: 4px 2px;background:#f0f0f0}
+.member .sig a{color: #333}
+.member:not(:first-of-type) {margin-top:20px}
+
+.field:first-of-type{margin-top:10px;}
+.field:not(:first-of-type) {border-top: 1px solid #ddd;padding-top:20px}
+
+pre{font-size: 16px}
+code{padding: 0px 3px;border-radius: 4px;background: #f7fafc;border: 1px solid rgba(0, 0, 0, 0.05)}
+pre code{padding:0;border-radius:0;border:0}
+/**
+ * One Light theme for prism.js
+ * Based on Atom's One Light theme: https://github.com/atom/atom/tree/master/packages/one-light-syntax
+ */
+code[class*=language-],pre[class*=language-]{background:#f9f9f9;color:#383942;font-family:monospace;direction:ltr;text-align:left;white-space:pre;word-spacing:normal;word-break:normal;line-height:1.5;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-hyphens:none;-moz-hyphens:none;-ms-hyphens:none;hyphens:none}code[class*=language-] ::-moz-selection,code[class*=language-]::-moz-selection,pre[class*=language-] ::-moz-selection{background:#e5e5e5;color:inherit}code[class*=language-] ::selection,code[class*=language-]::selection,pre[class*=language-] ::selection{background:#e5e5e5;color:inherit}pre[class*=language-]{padding:1em;margin:.5em 0;overflow:auto;border-radius:.3em}:not(pre)>code[class*=language-]{padding:.2em .3em;border-radius:.3em;white-space:normal}.token.cdata,.token.comment,.token.prolog{color:#888}.language-css .token.property,.language-json .token.operator,.language-markdown .token.url,.language-markdown .token.url-reference.url>.token.string,.language-markdown .token.url>.token.operator,.token.attr-value>.token.punctuation.attr-equals,.token.doctype,.token.entity,.token.punctuation,.token.special-attr>.token.attr-value>.token.value.css{color:#383942}.language-json .token.null.keyword,.language-markdown .token.bold .token.content,.token.atrule,.token.attr-name,.token.boolean,.token.class-name,.token.constant,.token.number{color:#b66a00}.language-css .token.atrule .token.rule,.language-css .token.important,.language-javascript .token.operator,.language-markdown .token.italic .token.content,.token.keyword{color:#a625a4}.language-css .token.selector,.language-markdown .token.list.punctuation,.language-markdown .token.strike .token.content,.language-markdown .token.strike .token.punctuation,.language-markdown .token.title.important>.token.punctuation,.token.deleted,.token.important,.token.property,.token.symbol,.token.tag{color:#e35549}.language-css .token.url>.token.string.url,.language-markdown .token.code-snippet,.token.attr-value,.token.attr-value>.token.punctuation,.token.builtin,.token.char,.token.inserted,.token.regex,.token.selector,.token.string{color:#50a04f}.language-markdown .token.url>.token.content,.token.function,.token.operator,.token.variable{color:#4078f1}.language-css .token.function,.language-css .token.url>.token.function,.language-markdown .token.url-reference.url,.language-markdown .token.url>.token.url,.token.url{color:#0083bb}.language-javascript .token.template-string>.token.interpolation>.token.interpolation-punctuation.punctuation{color:#c91142}.language-markdown .token.blockquote.punctuation,.language-markdown .token.hr.punctuation{color:#9fa0a6;font-style:italic}.token.bold{font-weight:700}.token.comment,.token.italic{font-style:italic}.token.entity{cursor:help}.token.namespace{opacity:.8}
+</style>
+{% block header %}{% endblock %}
+<header>
+	<ul>
+		<li><a href={{ env.baseURL }}/>home</a>
+		<li><a href=https://github.com/karlseguin/zul>github</a>
+	</ul>
+</header>
+
+<main{% if id %} id={{id}}{% endif %}>{{ content | safe }}</main>

@@ -1,0 +1,16 @@
+{
+	"name": "zul html documentation",
+	"version": "1.0.0",
+	"description": "",
+	"keywords": [],
+	"author": "",
+	"devDependencies": {
+		"@11ty/eleventy": "^2.0.1",
+		"@11ty/eleventy-plugin-syntaxhighlight": "^5.0.0",
+		"@grimlink/eleventy-plugin-sass": "^1.0.3",
+		"cheerio": "^1.0.0-rc.12",
+		"markdown-it-anchor": "^8.6.7",
+		"markdown-it-attrs": "^4.1.6",
+		"sass": "^1.69.5"
+	}
+}
