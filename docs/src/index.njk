@@ -26,14 +26,14 @@ eleventyExcludeFromCollections: true
 		<code>{{ post.data.title }}</code>
 		<p>{{ meta.desc }}</p>
 	</div>
-	{% if meta.example %}<a class=example href="{{ env.baseURL }}{{post.url}}#example">example</a>{% endif %}
+	<a href="{{ env.baseURL }}{{post.url}}#example">example</a>
 	<a href="{{ env.baseURL }}{{post.url}}">docs</a>
 </div>
-<div class=example style=display:none>{{ meta.example | safe }}</div>
+<div class=example style=display:none>{{ meta.example.html | safe }}</div>
 {%- endfor -%}
 
 <script>
-let links = document.querySelectorAll('.api > .example');
+let links = document.querySelectorAll('.api > a:first-of-type');
 for (let i = 0; i < links.length; ++i) {
 	links[i].addEventListener('click', function(e) {
 		const example = this.closest('.api').nextElementSibling;

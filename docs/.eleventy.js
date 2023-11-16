@@ -26,9 +26,10 @@ module.exports = function(config) {
 
 	config.addNunjucksGlobal('postMeta', function(post) {
 		const $ = cheerio.load(post.content);
+		const example = $('pre:first-of-type');
 		return {
 			desc: $('p').eq(0).text(),
-			example: $('pre:first-of-type').prop('outerHTML'),
+			example: {raw: example.text(), html: example.prop('outerHTML')},
 		};
 	});
 
