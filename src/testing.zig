@@ -17,22 +17,16 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 	return std.testing.expectEqual(@as(@TypeOf(actual), expected), actual);
 }
 
-pub fn expectNull(actual: anytype) !void {
-	try expectEqual(null, actual);
-}
-
-pub fn expectTrue(actual: bool) !void {
-	try expectEqual(true, actual);
-}
-
-pub fn expectFalse(actual: bool) !void {
-	try expectEqual(false, actual);
-}
-
+// Re-expose these as-is so that more cases can rely on zul.testing exclusively.
+// Else, it's a pain to have both std.testing and zul.testing in a test.
+pub const expect = std.testing.expect;
+pub const expectFmt = std.testing.expectFmt;
 pub const expectError = std.testing.expectError;
-pub const expectSlice = std.testing.expectEqualSlices;
-pub const expectString = std.testing.expectEqualStrings;
-
+pub const expectEqualSlices = std.testing.expectEqualSlices;
+pub const expectEqualStrings = std.testing.expectEqualStrings;
+pub const expectEqualSentinel = std.testing.expectEqualSentinel;
+pub const expectApproxEqAbs = std.testing.expectApproxEqAbs;
+pub const expectApproxEqRel = std.testing.expectApproxEqRel;
 
 pub const allocator = std.testing.allocator;
 pub var arena = std.heap.ArenaAllocator.init(allocator);
@@ -44,9 +38,9 @@ pub fn reset() void {
 pub const Random = struct {
 	var instance: ?std.rand.DefaultPrng = null;
 
-	pub fn bytes(min: u32, max: u32) []u8 {
+	pub fn bytes(min: usize, max: usize) []u8 {
 		var r = random();
-		const l = r.intRangeAtMost(u32, min, max);
+		const l = r.intRangeAtMost(usize, min, max);
 		const buf = arena.allocator().alloc(u8, l) catch unreachable;
 		r.bytes(buf);
 		return buf;
@@ -59,6 +53,11 @@ pub const Random = struct {
 		return buf;
 	}
 
+	pub fn intRange(comptime T: type, min: T, max: T) T {
+		var r = random();
+		return r.intRangeAtMost(T, min, max);
+	}
+
 	pub fn random() std.rand.Random {
 		if (instance == null) {
 			var seed: u64 = undefined;
@@ -68,3 +67,48 @@ pub const Random = struct {
 		return instance.?.random();
 	}
 };
+
+const t = @This();
+test "testing: rand bytes" {
+	defer t.reset();
+	for (0..10) |_| {
+		const bytes = Random.bytes(4, 8);
+		try t.expectEqual(true, bytes.len >= 4 and bytes.len <= 8);
+	}
+}
+
+test "testing: rand fillAtLeast" {
+	var buf: [10]u8 = undefined;
+
+	for (0..10) |_| {
+		var bytes = Random.fillAtLeast(&buf, 7);
+		try t.expectEqual(true, bytes.len >= 7 and bytes.len <= 10);
+	}
+}
+
+test "testing: rand intRange" {
+	for (0..10) |_| {
+		var value = Random.intRange(u16, 3, 6);
+		try t.expectEqual(true, value >= 3 and value <= 6);
+	}
+}
+
+test "testing: doc example" {
+	// clear's the arena allocator
+	defer t.reset();
+
+	// In addition to exposing std.testing.allocator as zul.testing.allocator
+	// zul.testing.arena is an ArenaAllocator. An ArenaAllocator can
+	// make managing test-specific allocations a lot simpler.
+	// Just stick a `defer zul.testing.reset()` atop your test.
+	var buf = try t.arena.allocator().alloc(u8, 5);
+
+	// unlike std.testing.expectEqual, zul's expectEqual
+	// will coerce expected to actual's type, so this is valid:
+	try t.expectEqual(5, buf.len);
+
+	@memcpy(buf[0..5], "hello");
+
+	// zul's expectEqual also works with strings.
+	try t.expectEqual("hello", buf);
+}

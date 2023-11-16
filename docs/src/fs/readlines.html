@@ -4,7 +4,7 @@ title: zul.fs.readLines
 ---
 
 <h1 id=zul.fs.readlines><a href=#zul.fs.readlines aria-hidden=true>zul.fs.readlines</a></h1>
-<p>Iterate over the lines in a file. this is much longer but let's hope it works</p>
+<p>Iterate over the lines in a file.</p>
 
 <h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
 {% highlight zig %}
@@ -88,7 +88,6 @@ while (try it.next()) |line| { ... }
 {% endhighlight %}
 
 <p>But if you want to actually catch/handle the error, the above becomes awkward.</p>
-
 
 <h2 id=note3><a href=#note3 aria-hidden=true>Note 3 - Buffer Size</a></h2>
 <p>By default, <code>readLines</code> will read from the file using a 4096 byte buffer. A different size can be specified via the <code>readLinesSize</code> function:</p>

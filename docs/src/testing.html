@@ -1,0 +1,150 @@
+---
+layout: site.njk
+title: zul.testing
+---
+
+<h1 id=zul.testing><a href=#zul.testing aria-hidden=true>zul.testing</a></h1>
+<p>Helpers for writing tests.</p>
+
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+const t = zul.testing;
+
+test "memcpy" {
+	// clear's the arena allocator
+	defer t.reset();
+
+	// In addition to exposing std.testing.allocator as zul.testing.allocator
+	// zul.testing.arena is an ArenaAllocator. An ArenaAllocator can
+	// make managing test-specific allocations a lot simpler.
+	// Just stick a `defer zul.testing.reset()` atop your test.
+	var buf = try t.arena.allocator().alloc(u8, 5);
+
+	// unlike std.testing.expectEqual, zul's expectEqual
+	// will coerce expected to actual's type, so this is valid:
+	try t.expectEqual(5, buf.len);
+
+	@memcpy(buf[0..5], "hello");
+
+	// zul's expectEqual also works with strings.
+	try t.expectEqual("hello", buf);
+}
+
+{% endhighlight %}
+
+<h3 id=export><a href=#export aria-hidden=true>std.testing export</a></h3>
+<p><code>zul.testing</code> directly re-exports some functionality from <code>std.testing.</code>. This is to minimize the number of cases where both <code>std.testing</code> and <code>zul.testing</code> are needed. The following variables and functions are available under <code>zul.testing</code>:</p>
+
+{% highlight zig %}
+pub const allocator = std.testing.allocator;
+
+pub const expect = std.testing.expect;
+pub const expectFmt = std.testing.expectFmt;
+pub const expectError = std.testing.expectError;
+pub const expectEqualSlices = std.testing.expectEqualSlices;
+pub const expectEqualStrings = std.testing.expectEqualStrings;
+pub const expectEqualSentinel = std.testing.expectEqualSentinel;
+pub const expectApproxEqAbs = std.testing.expectApproxEqAbs;
+pub const expectApproxEqRel = std.testing.expectApproxEqRel;
+{% endhighlight %}
+
+<h3 id=module_vars><a href=#module_vars aria-hidden=true>Variables</a></h3>
+<div>
+	<div class=member>
+		<code class=sig>arena: std.heap.ArenaAllocator</code>
+		<div class=desc>
+			<p>Complex tests often require their own allocation. This test-only data is particularly well suited for an ArenaAllocator.</p>
+
+			<p>Take care when using the arena. While it can streamline tests, it's easy to abuse. Code under test should use <code>zul.testing.allocator</code> (which is <code>std.testing.allocator</code>) so that leaks can be properly detected. Consider this slightly modified example taken from a real <code>readLines</code> test:</p>
+
+{% highlight zig %}
+const t = zul.testing;
+test "readLines" {
+	// clears the arena
+	defer t.reset();
+
+	const aa = t.arena.allocator();
+	const path = try std.fs.cwd().realpathAlloc(aa, "tests/sample");
+
+	var out: [30]u8 = undefined;
+	var it = try readLines(path, &out, .{});
+	defer it.deinit();
+
+	try t.expectEqual("Consider Phlebas", it.next().?);
+	try t.expectEqual("Old Man's War", it.next().?);
+	try t.expectEqual(null, it.next());
+}
+{% endhighlight %}
+
+			<p><code>path</code> is clearly data that belongs to the test and its lifecycle isn't something that our function under test, <code>readLines</code>, should be concerned with. If however, <code>readLInes</code> took some type of ownership over <code>path</code>, then <code>zul.testing.allocator</code> should have been used.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=module_functions><a href=#module_functions aria-hidden=true>Functions</a></h2>
+<div>
+	<div class=member>
+		<code class=sig id=expectEqual><a href=#expectEqual aria-hidden=true>expectEqual(expected anytype, actual anytype) !void</a></code>
+		<div class=desc>
+			<p>Similar to <code>std.testing.expectEqual</code>, but will coerce <code>expected</code> to <code>actual</code> and can be used to compare strings.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=reset><a href=#reset aria-hidden=true>reset()</a></code>
+		<div class=desc>
+			<p>Resets the <code>zul.testing.arena</code>. Typically called in a <code>defer</code> atop the test when the <code>zul.testing.arena</code> is used.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Random><a href=#Random aria-hidden=true>Random struct</a></h2>
+{% highlight zig %}
+const t = zul.testing;
+test "random example" {
+	// Some random functions use the zul.testing.arena allocator
+	// so we need to free that
+	defer t.reset();
+
+	// create a random integer
+	const min = t.Random.intRange(u32, 0, 10);
+	const max = t.Random.intRange(u32, min, min + 10);
+
+	// create a random []u8 between min and max length (inclusive)
+	// created using zul.testing.arena
+	var d1 = t.Random.bytes(min, max);
+
+	// fill buf with random bytes, returns a slice which
+	// is between min and buf.len in length (inclusive)
+	var buf: [10]u8 = undefined;
+	var d2 = t.Random.fillAtLeast(&buf, min);
+{% endhighlight %}
+
+<p>Helpers to generate random data.</p>
+<div>
+	<div class=member>
+		<code class=sig id=Random.bytes><a href=#Random.bytes aria-hidden=true>bytes(min: usize, max: usize) []u8</a></code>
+		<div class=desc>
+			<p>Populates a <code>[]u8</code> with random bytes. The created <code>[]u8</code> will be between <code>min</code> and <code>max</code> bytes in length (inclusive). It is created using the <code>zul.testing.arena</code> so <code><a href=#reset>reset</a></code> should be called.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Random.fillAtLeast><a href=#Random.fillAtLeast aria-hidden=true>fillAtLeast(buf: []u8, min: usize) []u8</a></code>
+		<div class=desc>
+			<p>Fill <code>buf</code> with random bytes. Returns a slice that is between <code>min</code> and <code>buf.len</code> bytes in length (inclusive). Because this only fills <code>buf</code> and doesn't allocate, in a tight loop, it can be much faster than <code><a href=#Random.bytes>bytes</a></code>, but calling <code>fillAtLeast</code> again with the same buffer will overrite any previously returned slice.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Random.intRange><a href=#Random.intRange aria-hidden=true>intRange(comptime T: type, min: T, max: T) T</a></code>
+		<div class=desc>
+			<p>Returns an integer of type <code>T</code> that is between <code>min</code> and <code>max</code> inclusive. This is a wrapper around <code>std.rand.Random.intRangeAtMost</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Random.random><a href=#Random.random aria-hidden=true>random() std.rand.Random</a></code>
+		<div class=desc>
+			<p>Returns a randomly seeded <code>std.rand.Random</code> instance.</p>
+		</div>
+	</div>
+</div>
+

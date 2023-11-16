@@ -15,23 +15,25 @@ eleventyExcludeFromCollections: true
 </style>
 {% endblock %}
 <h1>Zig Utility Library</h1>
-<p>The purpose of this library is to enhance Zig's standard library. Much of zul wraps Zig's std to provide simpler APIs for common tasks (e.g. reading lines from a file). In other cases, new functionality has been added (e.g. a UUID type). While we may introduce breaking changes, our higher level abstractions can hopefully shield users from some of Zig's constant changes.</p>
+<p>The purpose of this library is to enhance Zig's standard library. Much of zul wraps Zig's std to provide simpler APIs for common tasks (e.g. reading lines from a file). In other cases, new functionality has been added (e.g. a UUID type).</p>
 
-{%- for post in collections.all %}
+<p>Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can easily be copy and pasted into an existing library or project.</p>
+
+{%- for post in collections.sorted %}
 {%- set meta = postMeta(post) -%}
 <div class=api>
 	<div>
 		<code>{{ post.data.title }}</code>
 		<p>{{ meta.desc }}</p>
 	</div>
-	<a href="{{post.url}}#example">example</a>
+	{% if meta.example %}<a class=example href="{{post.url}}#example">example</a>{% endif %}
 	<a href="{{post.url}}">docs</a>
 </div>
 <div class=example style=display:none>{{ meta.example | safe }}</div>
 {%- endfor -%}
 
 <script>
-let links = document.querySelectorAll('.api > a:first-of-type');
+let links = document.querySelectorAll('.api > .example');
 for (let i = 0; i < links.length; ++i) {
 	links[i].addEventListener('click', function(e) {
 		const example = this.closest('.api').nextElementSibling;

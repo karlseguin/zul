@@ -11,6 +11,12 @@ module.exports = function(config) {
 	config.addPassthroughCopy('src/assets/favicon.png');
 	config.setTemplateFormats(['html', 'njk']);
 
+	config.addCollection("sorted", function(collectionApi) {
+		return collectionApi.getAll().sort(function(a, b) {
+			return a.url.localeCompare(b.url);
+		});
+	});
+
 	config.addPlugin(syntaxHighlight);
 	config.addPlugin(pluginSass, {
 		sass: sass,

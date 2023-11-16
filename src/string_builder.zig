@@ -488,7 +488,7 @@ test "StringBuilder: writer" {
 	defer sb.deinit();
 
 	try std.json.stringify(.{.over = 9000, .spice = "must flow", .ok = true}, .{}, sb.writer());
-	try t.expectString("{\"over\":9000,\"spice\":\"must flow\",\"ok\":true}", sb.string());
+	try t.expectEqual("{\"over\":9000,\"spice\":\"must flow\",\"ok\":true}", sb.string());
 }
 
 test "StringBuilder: copy" {
@@ -498,7 +498,7 @@ test "StringBuilder: copy" {
 	try sb.write("hello!!");
 	const c = try sb.copy(t.allocator);
 	defer t.allocator.free(c);
-	try t.expectString("hello!!", c);
+	try t.expectEqual("hello!!", c);
 }
 
 test "StringBuilder: write little" {

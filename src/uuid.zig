@@ -179,15 +179,15 @@ test "uuid: hex" {
 		const upper = uuid.toHex(.upper);
 		const lower = uuid.toHex(.lower);
 
-		try t.expectTrue(std.ascii.eqlIgnoreCase(&lower, &upper));
+		try t.expectEqual(true, std.ascii.eqlIgnoreCase(&lower, &upper));
 
 		for (upper, lower, 0..) |u, l, i| {
 			if (i == 8 or i == 13 or i == 18 or i == 23) {
 				try t.expectEqual('-', u);
 				try t.expectEqual('-', l);
 			} else {
-				try t.expectTrue((u >= '0' and u <= '9') or (u >= 'A' and u <= 'F'));
-				try t.expectTrue((l >= '0' and l <= '9') or (l >= 'a' and l <= 'f'));
+				try t.expectEqual(true, (u >= '0' and u <= '9') or (u >= 'A' and u <= 'F'));
+				try t.expectEqual(true, (l >= '0' and l <= '9') or (l >= 'a' and l <= 'f'));
 			}
 		}
 	}

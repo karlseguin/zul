@@ -1,0 +1,172 @@
+---
+layout: site.njk
+title: zul.benchmark.run
+---
+
+<h1 id=zul.benchmark.run><a href=#zul.benchmark.run aria-hidden=true>zul.benchmark.run</a></h1>
+<p>Simple benchmarking function.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+const HAYSTACK = "abcdefghijklmnopqrstvuwxyz0123456789";
+
+pub fn main() !void {
+	(try zul.benchmark.run(indexOfScalar, .{})).print("indexOfScalar");
+	(try zul.benchmark.run(lastIndexOfScalar, .{})).print("lastIndexOfScalar");
+}
+
+fn indexOfScalar(_: Allocator, _: *std.time.Timer) !void {
+	const i = std.mem.indexOfScalar(u8, HAYSTACK, '9').?;
+	if (i != 35) {
+		@panic("fail");
+	}
+}
+
+fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
+	const i = std.mem.lastIndexOfScalar(u8, HAYSTACK, 'a').?;
+	if (i != 0) {
+		@panic("fail");
+	}
+}
+
+// indexOfScalar
+//   49882322 iterations   59.45ns per iterations
+//   worst: 167ns  median: 42ns    stddev: 20.66ns
+//
+// lastIndexOfScalar
+//   20993066 iterations   142.15ns per iterations
+//   worst: 292ns  median: 125ns   stddev: 23.13ns
+{% endhighlight %}
+
+<h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
+<div>
+	<div class=member>
+		<code class=sig id=v4>allocator: std.mem.Allocator</code>
+		<div class=desc>
+			<p>Provided for any allocation the function must make. When used, the <code><a href=#Result>Result</a></code> will contain the <code>requested_bytes</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>timer: *std.time.Timer</code>
+		<div class=desc>
+			<p>In some cases, the function under benchmark might require setup that should not count towards the execution time. Use <code>timer.reset()</code> to reset the execution time to 0.</p>
+
+{% highlight zig %}
+fn myfunc(_: Allocator, timer: *std.time.Timer) !void {
+	// some expensive setup
+	timer.reset();
+	// code to benchmark
+}
+{% endhighlight %}
+
+			<p>In most cases, it is better to use <code><a href=#runC>runC</a></code> and provide a context.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>opts: zul.benchmark.Opts</code>
+		<div class=desc>
+			<p>Options that control how the benchmark is run. Must be comptime-known.</p>
+			<ul>
+				<li><code>samples: u32</code> - The maximum number of samples to take for calculating metrics. Defaults to <code>10_000</code></code>
+				<li><code>runtime: usize</code> - The time, in milliseconds, to run the benchmark for. Defaults ot <code>3000</code> (3 seconds).
+			</ul>
+		</div>
+	</div>
+</div>
+
+<h2 id=runC><a href=#runC aria-hidden=true>runC</a> variant</h2>
+<p>A variant of <code>run</code> that passes arbitrary data to the benchmark function. For example, rather than relying on a global <code>INPUT</code>, our above example could leverage <code>runC</code>:</p>
+
+{% highlight zig %}
+pub fn main() !void {
+	const ctx = Context{
+		.input = "abcdefghijklmnopqrstvuwxyz0123456789",
+	};
+
+	(try zul.benchmark.runC(ctx, indexOfScalar, .{})).print("indexOfScalar");
+	(try zul.benchmark.runC(ctx, lastIndexOfScalar, .{})).print("lastIndexOfScalar");
+}
+
+const Context = struct{
+	input: []const u8,
+};
+
+fn indexOfScalar(ctx: Context, _: Allocator, _: *std.time.Timer) !void {
+	const i = std.mem.indexOfScalar(u8, ctx.input, '9').?;
+	if (i != 35) {
+		@panic("fail");
+	}
+}
+
+fn lastIndexOfScalar(ctx: Context, _: Allocator, _: *std.time.Timer) !void {
+	const i = std.mem.lastIndexOfScalar(u8, ctx.input, 'a').?;
+	if (i != 0) {
+		@panic("fail");
+	}
+}
+{% endhighlight %}
+
+<h2 id=Result><a href=#Result aria-hidden=true>Result struct</a></h2>
+<p>A <code>zul.benchmark.Result(sample_size)</code> is returned by the call to <code>run</code> or <code>runC</code>.</p>
+
+<h3 id=Result.fields><a href=#Result.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=sig>total: u64</code>
+		<div class=desc>
+			<p>Total time, in nanosecond, that the benchmark ran for. This can be greater than the sum of values in <code>samples()</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig>iterations: u64</code>
+		<div class=desc>
+			<p>Number of times the benchmarked function was called. This can be greater than <code>samples().len</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig>requested_bytes: usize</code>
+		<div class=desc>
+			<p>Total number of bytes allocated by the allocator.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=Result.methods><a href=#Result.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=sig id=Result.print><a href=#Result.print aria-hidden=true>print(self: *const Result, name: []const u8) void</a></code>
+		<div class=desc>
+			<p>Outputs a summary to stderr (using std.debug.print)</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Result.samples><a href=#Result.samples aria-hidden=true>samples(self: *const Result) []const u64</a></code>
+		<div class=desc>
+			<p>Returns a sorted list of sample. The value is the time each sample took in nanoseconds.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Result.worst><a href=#Result.worst aria-hidden=true>worst(self: *const Result) u64</a></code>
+		<div class=desc>
+			<p>Returns the worst (slowest) sample time.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Result.mean><a href=#Result.mean aria-hidden=true>mean(self: *const Result) u64</a></code>
+		<div class=desc>
+			<p>Returns the mean of <code>samples()</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Result.median><a href=#Result.median aria-hidden=true>median(self: *const Result) u64</a></code>
+		<div class=desc>
+			<p>Returns the median of <code>samples()</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Result.stdDev><a href=#Result.stdDev aria-hidden=true>stdDev(self: *const Result) f64</a></code>
+		<div class=desc>
+			<p>Returns the stdDev of <code>samples()</code>.</p>
+		</div>
+	</div>
+</div>

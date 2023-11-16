@@ -110,7 +110,7 @@ test "fs.readLines: empty" {
 	for (testAbsoluteAndRelative("tests/empty")) |file_path| {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
-		try t.expectNull(it.next());
+		try t.expectEqual(null, it.next());
 		try it.err();
 	}
 }
@@ -122,7 +122,7 @@ test "fs.readLines: single char" {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
 		try t.expectEqual("l", it.next().?);
-		try t.expectNull(it.next());
+		try t.expectEqual(null, it.next());
 		try it.err();
 	}
 }
@@ -133,7 +133,7 @@ test "fs.readLines: larger than out" {
 	for (testAbsoluteAndRelative("tests/fs/long_line")) |file_path| {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
-		try t.expectNull(it.next());
+		try t.expectEqual(null, it.next());
 		try t.expectEqual(error.StreamTooLong, it.err());
 	}
 }
@@ -152,7 +152,7 @@ test "fs.readLines: multiple lines" {
 		try t.expectEqual("Roadside Picnic", it.next().?);
 		try t.expectEqual("The Fifth Season", it.next().?);
 		try t.expectEqual("Sundiver", it.next().?);
-		try t.expectNull(it.next());
+		try t.expectEqual(null, it.next());
 		try it.err();
 	}
 }

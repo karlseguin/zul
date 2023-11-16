@@ -22,20 +22,20 @@ std.debug.print("{any}\n", uuid1.eql(uuid2));
 try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
 {% endhighlight %}
 
-<h2 id=module_functions><a href=#module_functions aria-hidden=true>Module Functions</a></h2>
+<h2 id=functions><a href=#functions aria-hidden=true>Functions</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=v4><a href=#v4 aria-hidden=true>fn v4()</a> <a href=#UUID>UUID</a></code>
+		<code class=sig id=v4><a href=#v4 aria-hidden=true>v4()</a> <a href=#UUID>UUID</a></code>
 		<div class=desc><p>Generate a version 4 (random) UUID.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=random><a href=#random aria-hidden=true>fn random()</a> <a href=#UUID>UUID</a></code>
+		<code class=sig id=random><a href=#random aria-hidden=true>random()</a> <a href=#UUID>UUID</a></code>
 		<div class=desc>
 			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>v4()</a> unless you have specific reasons not to.</div>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=random><a href=#random aria-hidden=true>fn parse(hex: []const u8)</a> !<a href=#UUID>UUID</a></code>
+		<code class=sig id=random><a href=#random aria-hidden=true>parse(hex: []const u8)</a> !<a href=#UUID>UUID</a></code>
 		<div class=desc>
 			<p>Attempts to parse a hex-encoded UUID. Returns <code>error.InvalidUUID</code> is the UUID is not valid.</div>
 		</div>
