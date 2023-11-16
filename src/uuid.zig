@@ -14,15 +14,15 @@ pub const UUID = struct {
 		return true;
 	}
 
-	pub fn toHexAlloc(self: UUID, allocator: Allocator, case: std.fmt.Case, ) ![]u8 {
+	pub fn toHexAlloc(self: UUID, allocator: std.mem.Allocator, case: std.fmt.Case, ) ![]u8 {
 		const hex = try allocator.alloc(u8, 36);
-		_ = self.toHexBuf(hex, buf);
+		_ = self.toHexBuf(hex, case);
 		return hex;
 	}
 
 	pub fn toHex(self: UUID, case: std.fmt.Case) [36]u8 {
 		var hex: [36]u8 = undefined;
-		_ = self.toHexBuf(&hex, buf);
+		_ = self.toHexBuf(&hex, case);
 		return hex;
 	}
 
@@ -45,11 +45,11 @@ pub const UUID = struct {
 	}
 
 	pub fn jsonStringify(self: UUID, out: anytype) !void {
-		var buf: [38]u8 = undefined;
-		buf[0] = '"';
-		_ = self.toHexBuf(.lower, buf[1..37]);
-		buf[37] = '"';
-		try out.print("{s}", .{buf});
+		var hex: [38]u8 = undefined;
+		hex[0] = '"';
+		_ = self.toHexBuf(hex[1..37], .lower);
+		hex[37] = '"';
+		try out.print("{s}", .{hex});
 	}
 
 	pub fn format(self: UUID, comptime layout: []const u8, options: fmt.FormatOptions, out: anytype) !void {
@@ -168,7 +168,7 @@ test "uuid: v4" {
 		try t.expectEqual(@as(usize, 16), uuid.bin.len);
 		try t.expectEqual(4, uuid.bin[6] >> 4);
 		try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
-		seen.putAssumeCapacity(try uuid.toHexAlloc(.lower, allocator), {});
+		seen.putAssumeCapacity(try uuid.toHexAlloc(allocator, .lower), {});
 	}
 	try t.expectEqual(100, seen.count());
 }

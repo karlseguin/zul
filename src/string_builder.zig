@@ -1,10 +1,147 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
+const Endian = std.builtin.Endian;
 const Allocator = std.mem.Allocator;
 
-pub const StringBuilder = struct {
+pub const View = struct {
 	pos: usize,
+	sb: *StringBuilder,
+
+	pub fn writeByte(self: *View, b: u8) void {
+		const pos = self.pos;
+		writeByteInto(self.sb.buf, pos, b);
+		self.pos = pos + 1;
+	}
+
+	pub fn writeByteNTimes(self: *View, b: u8, n: usize) void {
+		const pos = self.pos;
+		writeByteNTimesInto(self.sb.buf, pos, b, n);
+		self.pos = pos + n;
+	}
+
+	pub fn write(self: *View, data: []const u8) void {
+		const pos = self.pos;
+		writeInto(self.sb.buf, pos, data);
+		self.pos = pos + data.len;
+	}
+
+	pub fn writeU16(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, self.endian);
+	}
+
+	pub fn writeI16(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, self.endian);
+	}
+
+	pub fn writeU32(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, self.endian);
+	}
+
+	pub fn writeI32(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, self.endian);
+	}
+
+	pub fn writeU64(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, self.endian);
+	}
+
+	pub fn writeI64(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, self.endian);
+	}
+
+	pub fn writeU16Little(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, .little);
+	}
+
+	pub fn writeI16Little(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, .little);
+	}
+
+	pub fn writeU32Little(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, .little);
+	}
+
+	pub fn writeI32Little(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, .little);
+	}
+
+	pub fn writeU64Little(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, .little);
+	}
+
+	pub fn writeI64Little(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, .little);
+	}
+
+	pub fn writeU16Big(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, .big);
+	}
+
+	pub fn writeI16Big(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, .big);
+	}
+
+	pub fn writeU32Big(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, .big);
+	}
+
+	pub fn writeI32Big(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, .big);
+	}
+
+	pub fn writeU64Big(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, .big);
+	}
+
+	pub fn writeI64Big(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, .big);
+	}
+
+	fn writeIntT(self: *View, comptime T: type, value: T, endian: Endian) void {
+		const l = @divExact(@typeInfo(T).Int.bits, 8);
+		const pos = self.pos;
+		writeIntInto(T, self.sb.buf, pos, value, l, endian);
+		self.pos = pos + l;
+	}
+
+	pub fn writeInt(self: *View, value: anytype) void {
+		return self.writeIntAs(value, self.endian);
+	}
+
+	pub fn writeIntAs(self: *View, value: anytype, endian: Endian) void {
+		const T = @TypeOf(value);
+		switch (@typeInfo(T)) {
+			.ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
+			.Int => |int| {
+				if (int.signedness == .signed) {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(i16, value, endian),
+						32 => return self.writeIntT(i32, value, endian),
+						64 => return self.writeIntT(i64, value, endian),
+						else => {},
+					}
+				} else {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(u16, value, endian),
+						32 => return self.writeIntT(u32, value, endian),
+						64 => return self.writeIntT(u64, value, endian),
+						else => {},
+					}
+				}
+			},
+			else => {},
+		}
+		@compileError("Unsupported integer type: " ++ @typeName(T));
+	}
+};
+
+pub const StringBuilder = struct {
 	buf: []u8,
+	pos: usize,
+	endian: Endian,
 	allocator: Allocator,
 
 	pub fn init(allocator: Allocator) StringBuilder {
@@ -12,6 +149,7 @@ pub const StringBuilder = struct {
 			.pos = 0,
 			.buf = &[_]u8{},
 			.allocator = allocator,
+			.endian = builtin.cpu.arch.endian(),
 		};
 	}
 
@@ -47,6 +185,16 @@ pub const StringBuilder = struct {
 		self.pos = pos - n;
 	}
 
+	pub fn skip(self: *StringBuilder, n: usize) !View {
+		try self.ensureUnusedCapacity(n);
+		const pos = self.pos;
+		self.pos = pos + n;
+		return .{
+			.pos = pos,
+			.sb = self,
+		};
+	}
+
 	pub fn writeByte(self: *StringBuilder, b: u8) !void {
 		try self.ensureUnusedCapacity(b);
 		self.writeByteAssumeCapacity(b);
@@ -54,17 +202,14 @@ pub const StringBuilder = struct {
 
 	pub fn writeByteAssumeCapacity(self: *StringBuilder, b: u8) void {
 		const pos = self.pos;
-		self.buf[pos] = b;
+		writeByteInto(self.buf, pos, b);
 		self.pos = pos + 1;
 	}
 
 	pub fn writeByteNTimes(self: *StringBuilder, b: u8, n: usize) !void {
 		try self.ensureUnusedCapacity(n);
 		const pos = self.pos;
-		const buf = self.buf;
-		for (0..n) |offset| {
-			buf[pos+offset] = b;
-		}
+		writeByteNTimesInto(self.buf, pos, b, n);
 		self.pos = pos + n;
 	}
 
@@ -75,54 +220,122 @@ pub const StringBuilder = struct {
 
 	pub fn writeAssumeCapacity(self: *StringBuilder, data:[] const u8) void {
 		const pos = self.pos;
-		const end_pos = pos + data.len;
-		@memcpy(self.buf[pos..end_pos], data);
-		self.pos = end_pos;
+		writeInto(self.buf, pos, data);
+		self.pos = pos + data.len;
+	}
+
+	pub fn writeU16(self: *StringBuilder, value: u16) !void {
+		return self.writeIntT(u16, value, self.endian);
+	}
+
+	pub fn writeI16(self: *StringBuilder, value: i16) !void {
+		return self.writeIntT(i16, value, self.endian);
+	}
+
+	pub fn writeU32(self: *StringBuilder, value: u32) !void {
+		return self.writeIntT(u32, value, self.endian);
+	}
+
+	pub fn writeI32(self: *StringBuilder, value: i32) !void {
+		return self.writeIntT(i32, value, self.endian);
+	}
+
+	pub fn writeU64(self: *StringBuilder, value: u64) !void {
+		return self.writeIntT(u64, value, self.endian);
+	}
+
+	pub fn writeI64(self: *StringBuilder, value: i64) !void {
+		return self.writeIntT(i64, value, self.endian);
 	}
 
 	pub fn writeU16Little(self: *StringBuilder, value: u16) !void {
-		return self.writeIntLittle(u16, value);
+		return self.writeIntT(u16, value, .little);
+	}
+
+	pub fn writeI16Little(self: *StringBuilder, value: i16) !void {
+		return self.writeIntT(i16, value, .little);
 	}
 
 	pub fn writeU32Little(self: *StringBuilder, value: u32) !void {
-		return self.writeIntLittle(u32, value);
+		return self.writeIntT(u32, value, .little);
+	}
+
+	pub fn writeI32Little(self: *StringBuilder, value: i32) !void {
+		return self.writeIntT(i32, value, .little);
 	}
 
 	pub fn writeU64Little(self: *StringBuilder, value: u64) !void {
-		return self.writeIntLittle(u64, value);
+		return self.writeIntT(u64, value, .little);
 	}
 
-	pub fn writeIntLittle(self: *StringBuilder, comptime T: type, value: T) !void {
-		const l = @divExact(@typeInfo(T).Int.bits, 8);
-		try self.ensureUnusedCapacity(l);
-
-		const pos = self.pos;
-		const end_pos = pos + l;
-		std.mem.writeInt(T, self.buf[pos..end_pos][0..l], value, .little);
-		self.pos = end_pos;
+	pub fn writeI64Little(self: *StringBuilder, value: i64) !void {
+		return self.writeIntT(i64, value, .little);
 	}
 
 	pub fn writeU16Big(self: *StringBuilder, value: u16) !void {
-		return self.writeIntBig(u16, value);
+		return self.writeIntT(u16, value, .big);
+	}
+
+	pub fn writeI16Big(self: *StringBuilder, value: i16) !void {
+		return self.writeIntT(i16, value, .big);
 	}
 
 	pub fn writeU32Big(self: *StringBuilder, value: u32) !void {
-		return self.writeIntBig(u32, value);
+		return self.writeIntT(u32, value, .big);
+	}
+
+	pub fn writeI32Big(self: *StringBuilder, value: i32) !void {
+		return self.writeIntT(i32, value, .big);
 	}
 
 	pub fn writeU64Big(self: *StringBuilder, value: u64) !void {
-		return self.writeIntBig(u64, value);
+		return self.writeIntT(u64, value, .big);
 	}
 
-	pub fn writeIntBig(self: *StringBuilder, comptime T: type, value: T) !void {
+	pub fn writeI64Big(self: *StringBuilder, value: i64) !void {
+		return self.writeIntT(i64, value, .big);
+	}
+
+	fn writeIntT(self: *StringBuilder, comptime T: type, value: T, endian: Endian) !void {
 		const l = @divExact(@typeInfo(T).Int.bits, 8);
 		try self.ensureUnusedCapacity(l);
-
 		const pos = self.pos;
-		const end_pos = pos + l;
-		std.mem.writeInt(T, self.buf[pos..end_pos][0..l], value, .big);
-		self.pos = end_pos;
+		writeIntInto(T, self.buf, pos, value, l, endian);
+		self.pos = pos + l;
 	}
+
+	pub fn writeInt(self: *StringBuilder, value: anytype) !void {
+		return self.writeIntAs(value, self.endian);
+	}
+
+	pub fn writeIntAs(self: *StringBuilder, value: anytype, endian: Endian) !void {
+		const T = @TypeOf(value);
+		switch (@typeInfo(T)) {
+			.ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
+			.Int => |int| {
+				if (int.signedness == .signed) {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(i16, value, endian),
+						32 => return self.writeIntT(i32, value, endian),
+						64 => return self.writeIntT(i64, value, endian),
+						else => {},
+					}
+				} else {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(u16, value, endian),
+						32 => return self.writeIntT(u32, value, endian),
+						64 => return self.writeIntT(u64, value, endian),
+						else => {},
+					}
+				}
+			},
+			else => {},
+		}
+		@compileError("Unsupported integer type: " ++ @typeName(T));
+	}
+
 
 	pub fn ensureUnusedCapacity(self: *StringBuilder, n: usize) !void {
 		return self.ensureTotalCapacity(self.pos + n);
@@ -172,6 +385,27 @@ pub const StringBuilder = struct {
 		}
 	};
 };
+
+// Functions that write for either a *StringBuilder or a *View
+inline fn writeInto(buf: []u8, pos: usize, data: []const u8) void {
+	const end_pos = pos + data.len;
+	@memcpy(buf[pos..end_pos], data);
+}
+
+inline fn writeByteInto(buf: []u8, pos: usize, b: u8) void {
+	buf[pos] = b;
+}
+
+inline fn writeByteNTimesInto(buf: []u8, pos: usize, b: u8, n: usize) void {
+	for (0..n) |offset| {
+		buf[pos+offset] = b;
+	}
+}
+
+inline fn writeIntInto(comptime T: type, buf: []u8, pos: usize, value: T, l: usize, endian: Endian) void {
+	const end_pos = pos + l;
+	std.mem.writeInt(T, buf[pos..end_pos][0..l], value, endian);
+}
 
 const t = @import("zul.zig").testing;
 
@@ -270,25 +504,202 @@ test "StringBuilder: copy" {
 test "StringBuilder: write little" {
 	var sb = StringBuilder.init(t.allocator);
 	defer sb.deinit();
-	try sb.writeU64Little(11234567890123456789);
-	try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155}, sb.string());
 
-	try sb.writeU32Little(3283856184);
-	try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195}, sb.string());
+	{
+		// unsigned
+		try sb.writeU64Little(11234567890123456789);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155}, sb.string());
 
-	try sb.writeU16Little(15000);
-	try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195, 152, 58}, sb.string());
+		try sb.writeU32Little(3283856184);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195}, sb.string());
+
+		try sb.writeU16Little(15000);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195, 152, 58}, sb.string());
+	}
+
+	{
+		// signed
+		sb.clearRetainingCapacity();
+		try sb.writeI64Little(-1123456789012345678);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240}, sb.string());
+
+		try sb.writeI32Little(-328385618);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236}, sb.string());
+
+		try sb.writeI16Little(-15001);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236, 103, 197}, sb.string());
+	}
+
+	{
+		// writeXYZ with sb.endian == .litle, unsigned
+		sb.clearRetainingCapacity();
+		sb.endian = .little;
+		try sb.writeU64(11234567890123456789);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155}, sb.string());
+
+		try sb.writeU32(3283856184);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195}, sb.string());
+
+		try sb.writeU16(15000);
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195, 152, 58}, sb.string());
+	}
+
+	{
+		// writeXYZ with sb.endian == .litle, signed
+		sb.clearRetainingCapacity();
+		sb.endian = .little;
+		try sb.writeI64(-1123456789012345678);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240}, sb.string());
+
+		try sb.writeI32(-328385618);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236}, sb.string());
+
+		try sb.writeI16(-15001);
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236, 103, 197}, sb.string());
+	}
+
+	{
+		// writeInt with sb.endian == .litle, unsigned
+		sb.clearRetainingCapacity();
+		sb.endian = .little;
+		try sb.writeInt(@as(u64, 11234567890123456789));
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155}, sb.string());
+
+		try sb.writeInt(@as(u32, 3283856184));
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195}, sb.string());
+
+		try sb.writeInt(@as(u16, 15000));
+		try t.expectEqual(&[_]u8{21, 129, 209, 7, 249, 51, 233, 155, 56, 171, 187, 195, 152, 58}, sb.string());
+	}
+
+	{
+		// writeInt with sb.endian == .litle, signed
+		sb.clearRetainingCapacity();
+		sb.endian = .little;
+		try sb.writeInt(@as(i64, -1123456789012345678));
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240}, sb.string());
+
+		try sb.writeInt(@as(i32, -328385618));
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236}, sb.string());
+
+		try sb.writeInt(@as(i16, -15001));
+		try t.expectEqual(&[_]u8{178, 12, 107, 178, 0, 174, 104, 240, 174, 59, 109, 236, 103, 197}, sb.string());
+	}
 }
 
 test "StringBuilder: write big" {
 	var sb = StringBuilder.init(t.allocator);
 	defer sb.deinit();
-	try sb.writeU64Big(11234567890123456789);
-	try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21}, sb.string());
+	{
+		// unsigned
+		try sb.writeU64Big(11234567890123456789);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21}, sb.string());
 
-	try sb.writeU32Big(3283856184);
-	try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56}, sb.string());
+		try sb.writeU32Big(3283856184);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56}, sb.string());
 
-	try sb.writeU16Big(15000);
-	try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56, 58, 152}, sb.string());
+		try sb.writeU16Big(15000);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56, 58, 152}, sb.string());
+	}
+
+	{
+		// signed
+		sb.clearRetainingCapacity();
+		try sb.writeI64Big(-1123456789012345678);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178}, sb.string());
+
+		try sb.writeI32Big(-328385618);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174}, sb.string());
+
+		try sb.writeI16Big(-15001);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174, 197, 103}, sb.string());
+	}
+
+	{
+		// writeXYZ with sb.endian == .litle, unsigned
+		sb.clearRetainingCapacity();
+		sb.endian = .big;
+		try sb.writeU64(11234567890123456789);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21}, sb.string());
+
+		try sb.writeU32(3283856184);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56}, sb.string());
+
+		try sb.writeU16(15000);
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56, 58, 152}, sb.string());
+	}
+
+	{
+		// writeXYZ with sb.endian == .litle, signed
+		sb.clearRetainingCapacity();
+		sb.endian = .big;
+		try sb.writeI64(-1123456789012345678);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178}, sb.string());
+
+		try sb.writeI32(-328385618);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174}, sb.string());
+
+		try sb.writeI16(-15001);
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174, 197, 103}, sb.string());
+	}
+
+	{
+		// wrinteInt with sb.endian == .big, unsigned
+		sb.clearRetainingCapacity();
+		sb.endian = .big;
+		try sb.writeInt(@as(u64, 11234567890123456789));
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21}, sb.string());
+
+		try sb.writeInt(@as(u32, 3283856184));
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56}, sb.string());
+
+		try sb.writeInt(@as(u16, 15000));
+		try t.expectEqual(&[_]u8{155, 233, 51, 249, 7, 209, 129, 21, 195, 187, 171, 56, 58, 152}, sb.string());
+	}
+
+	{
+		// writeInt with sb.endian == .big, signed
+		sb.clearRetainingCapacity();
+		sb.endian = .big;
+		try sb.writeInt(@as(i64, -1123456789012345678));
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178}, sb.string());
+
+		try sb.writeInt(@as(i32, -328385618));
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174}, sb.string());
+
+		try sb.writeInt(@as(i16, -15001));
+		try t.expectEqual(&[_]u8{240, 104, 174, 0, 178, 107, 12, 178, 236, 109, 59, 174, 197, 103}, sb.string());
+	}
+}
+
+test "StringBuilder: skip" {
+	var sb = StringBuilder.init(t.allocator);
+	defer sb.deinit();
+
+	{
+		try sb.writeByte('!');
+		var view = try sb.skip(3);
+		view.write("123");
+
+		try t.expectEqual("!123", sb.string());
+	}
+
+	{
+		sb.clearRetainingCapacity();
+		try sb.writeByte('D');
+		var view = try sb.skip(2);
+		view.writeU16Little(9001);
+		try t.expectEqual(&.{'D', 41, 35}, sb.string());
+	}
+}
+
+test "StringBuilder: doc example" {
+	var sb = StringBuilder.init(t.allocator);
+	defer sb.deinit();
+
+	var view = try sb.skip(4);
+	try sb.writeByte(10);
+	try sb.write("hello");
+	view.writeU32Big(@intCast(sb.len() - 4));
+	try t.expectEqual(&.{0, 0, 0, 6, 10, 'h', 'e', 'l', 'l', 'o'}, sb.string());
 }

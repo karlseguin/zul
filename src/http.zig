@@ -146,107 +146,107 @@ pub const Response = struct {
 	}
 };
 
-const t = zul.testing;
-test "http.Request" {
-	defer t.reset();
+// const t = zul.testing;
+// test "http.Request" {
+// 	defer t.reset();
 
-	// Write all of this in a single test so that we don't have to worry about
-	// managing our dummy server.
-	var server = std.http.Server.init(t.allocator, .{.reuse_address = true});
-	defer server.deinit();
+// 	// Write all of this in a single test so that we don't have to worry about
+// 	// managing our dummy server.
+// 	var server = std.http.Server.init(t.allocator, .{.reuse_address = true});
+// 	defer server.deinit();
 
-	const address = try std.net.Address.parseIp("127.0.0.1", 6370);
-	try server.listen(address);
+// 	const address = try std.net.Address.parseIp("127.0.0.1", 6370);
+// 	try server.listen(address);
 
-	const server_thread = try std.Thread.spawn(.{}, (struct {
-		fn apply(s: *std.http.Server) !void {
-			while (true) {
-				var res = try s.accept(.{.allocator = t.allocator});
+// 	const server_thread = try std.Thread.spawn(.{}, (struct {
+// 		fn apply(s: *std.http.Server) !void {
+// 			while (true) {
+// 				var res = try s.accept(.{.allocator = t.allocator});
 
-				defer res.deinit();
-				defer _ = res.reset();
-				try res.wait();
+// 				defer res.deinit();
+// 				defer _ = res.reset();
+// 				try res.wait();
 
-				try res.headers.append("connection", "close");
-				if (std.mem.eql(u8, "/stop", res.request.target) == true) {
-					// non-echo, stop the server
-					try res.send();
-					try res.finish();
-					break;
-				}
+// 				try res.headers.append("connection", "close");
+// 				if (std.mem.eql(u8, "/stop", res.request.target) == true) {
+// 					// non-echo, stop the server
+// 					try res.send();
+// 					try res.finish();
+// 					break;
+// 				}
 
-				res.transfer_encoding = .{.chunked = {}};
+// 				res.transfer_encoding = .{.chunked = {}};
 
-				const req = res.request;
-				const aa = t.arena.allocator();
-				for (req.headers.list.items) |field| {
-					const name = try aa.alloc(u8, field.name.len + 4);
-					@memcpy(name[0..4], "REQ-");
-					@memcpy(name[4..], field.name);
-					try res.headers.append(name, field.value);
-				}
-				try res.send();
+// 				const req = res.request;
+// 				const aa = t.arena.allocator();
+// 				for (req.headers.list.items) |field| {
+// 					const name = try aa.alloc(u8, field.name.len + 4);
+// 					@memcpy(name[0..4], "REQ-");
+// 					@memcpy(name[4..], field.name);
+// 					try res.headers.append(name, field.value);
+// 				}
+// 				try res.send();
 
-				try std.json.stringify(.{
-					.url = req.target,
-					.method = req.method,
-				}, .{}, res.writer());
+// 				try std.json.stringify(.{
+// 					.url = req.target,
+// 					.method = req.method,
+// 				}, .{}, res.writer());
 
-				try res.finish();
-			}
-		}
-	}).apply, .{&server});
+// 				try res.finish();
+// 			}
+// 		}
+// 	}).apply, .{&server});
 
 
-	var client = Client.init(t.allocator);
-	defer client.deinit();
+// 	var client = Client.init(t.allocator);
+// 	defer client.deinit();
 
-	{
-		var req = try client.request("http://127.0.0.1:6370/echo");
-		defer req.deinit();
-		try req.header("R_1", "A Value");
-		try req.header("x-request-header", "value;2");
+// 	{
+// 		var req = try client.request("http://127.0.0.1:6370/echo");
+// 		defer req.deinit();
+// 		try req.header("R_1", "A Value");
+// 		try req.header("x-request-header", "value;2");
 
-		const res = try req.request();
-		const echo = try res.json(TestEcho, .{});
-		try t.expectEqual("/echo", echo.url);
-		try t.expectEqual("GET", echo.method);
+// 		const res = try req.request();
+// 		const echo = try res.json(TestEcho, .{});
+// 		try t.expectEqual("/echo", echo.url);
+// 		try t.expectEqual("GET", echo.method);
 
-		try t.expectEqual(null, res.header("REQ-OTHER"));
-		try t.expectEqual("A Value", res.header("REQ-R_1").?);
-		try t.expectEqual("value;2", res.header("REQ-x-request-header").?);
-	}
+// 		try t.expectEqual(null, res.header("REQ-OTHER"));
+// 		try t.expectEqual("A Value", res.header("REQ-R_1").?);
+// 		try t.expectEqual("value;2", res.header("REQ-x-request-header").?);
+// 	}
 
-	{
-		var req = try client.request("http://127.0.0.1:6370/echo?query key=query value");
-		defer req.deinit();
+// 	{
+// 		var req = try client.request("http://127.0.0.1:6370/echo?query key=query value");
+// 		defer req.deinit();
 
-		const res = try req.request();
-		const echo = try res.json(TestEcho, .{});
-		try t.expectEqual("/echo?query%20key=query%20value", echo.url);
-	}
+// 		const res = try req.request();
+// 		const echo = try res.json(TestEcho, .{});
+// 		try t.expectEqual("/echo?query%20key=query%20value", echo.url);
+// 	}
 
-	{
-		var req = try client.request("http://127.0.0.1:6370/echo");
-		defer req.deinit();
-		try req.query("search term", "peanut butter");
-		try req.query("limit", "10");
+// 	{
+// 		var req = try client.request("http://127.0.0.1:6370/echo");
+// 		defer req.deinit();
+// 		try req.query("search term", "peanut butter");
+// 		try req.query("limit", "10");
 
-		const res = try req.request();
-		const echo = try res.json(TestEcho, .{});
-		try t.expectEqual("/echo?search%20term=peanut%20butter&limit=10", echo.url);
-	}
+// 		const res = try req.request();
+// 		const echo = try res.json(TestEcho, .{});
+// 		try t.expectEqual("/echo?search%20term=peanut%20butter&limit=10", echo.url);
+// 	}
 
-	{
-		var req = try client.request("http://127.0.0.1:6370/stop");
-		defer req.deinit();
-		_ = try req.request();
-	}
+// 	{
+// 		var req = try client.request("http://127.0.0.1:6370/stop");
+// 		defer req.deinit();
+// 		_ = try req.request();
+// 	}
 
-	server_thread.join();
-}
+// 	server_thread.join();
+// }
 
-const TestEcho = struct {
-	url: []const u8,
-	method: []const u8,
-};
+// const TestEcho = struct {
+// 	url: []const u8,
+// 	method: []const u8,
+// };

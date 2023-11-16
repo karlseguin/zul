@@ -1,0 +1,209 @@
+---
+layout: site.njk
+title: zul.StringBuilder
+---
+
+<h1 id=zul.StringBuilder><a href=#zul.StringBuilder aria-hidden=true>zul.StringBuilder</a></h1>
+<p>Efficiently create dynamic strings or binary data.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// StringBuilder can be used to efficiently concatenate strings
+// But it can also be used to craft binary payloads.
+var sb = zul.StringBuilder.init(t.allocator);
+defer sb.deinit();
+
+// We're going to generate a 4-byte length-prefixed message.
+// We don't know the length yet, so we'll skip 4 bytes
+// We get back a "view" which will let us backfill the length
+var view = try sb.skip(4);
+
+// Writes a single byte
+try sb.writeByte(10);
+
+// Writes a []const u8
+try sb.write("hello");
+
+// Using our view, which points to where the view was taken,
+// fill in the length.
+view.writeU32Big(@intCast(sb.len() - 4));
+
+std.debug.print("{any}\n", .{sb.string()});
+// []u8{0, 0, 0, 6, 10, 'h', 'e', 'l', 'l', 'o'}
+{% endhighlight %}
+
+<h2 id=StringBuilder><a href=#StringBuilder aria-hidden=true>StringBuilder struct</a></h2>
+<p><code>zul.StringBuilder</code> is a wrapper around a dynamically growable <code>[]u8</code> and iis designed for string concatenation or creating binary payloads. While <code>std.ArrayList(u8)</code> can be used for the same purpose, the non-generic nature of <code>StringBuilder</code> results in a cleaner interface.</p>
+
+<h3 id=StringBuilder.fields><a href=#StringBuilder.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=sig>endian: std.builtin.Endian</code>
+		<div class=desc>
+			<p>The endianness to use, <code>.big</code> or <code>.little</code>, when encoding integers. Defaults to the current architecture.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=StringBuilder.methods><a href=#StringBuilder.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=sig id=StringBuilder.init><a href=#StringBuilder.init aria-hidden=true>init(allocator: Allocator) StringBuilder</a></code>
+		<div class=desc>
+			<p>Creates a <code>StringBuilder</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.deinint><a href=#StringBuilder.deinint aria-hidden=true>deinint(self: StringBuilder) StringBuilder</a></code>
+		<div class=desc>
+			<p>Releases all allocated memory. The <code>StringBuilder</code> should not be used after this is called.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.clearRetainingCapacity><a href=#StringBuilder.clearRetainingCapacity aria-hidden=true>clearRetainingCapacity(self: StringBuilder) void</a></code>
+		<div class=desc>
+			<p>Resets the <code>StringBuilder</code>'s length to 0 without freeing the underlying buffer. It is safe to re-use the <code>StringBuilder</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.copy><a href=#StringBuilder.copy aria-hidden=true>copy(sb: StringBuilder, allocator: Allocator) ![]u8</a></code>
+		<div class=desc>
+			<p>Creates a copy of the written data using the provided <code>allocator</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.ensureUnusedCapacity><a href=#StringBuilder.ensureUnusedCapacity aria-hidden=true>ensureUnusedCapacity(sb: *StringBuilder, n: usize) !void</a></code>
+		<div class=desc>
+			<p>Ensures that the the underlying buffer has <code>n</code> spare bytes. If not, tries to allocates enough memory to allocate <code>n</code> additional bytes.</p>
+			<p>This can be used to pre-grow the buffer prior to making a large number of writes.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.len><a href=#StringBuilder.len aria-hidden=true>len(sb: StringBuilder) usize</a></code>
+		<div class=desc>
+			<p>Returns the length of the written data.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.skip><a href=#StringBuilder.skip aria-hidden=true>skip(sb: *StringBuilder, count: usize) !View</a></code>
+		<div class=desc>
+			<p>Skips the specified number of bytes and returns a <code><a href="#View">View</a></code> that can be used to backfill the skipped data.</p>
+			<p><code>count</code> can be larger than the existing buffer length, in which case <code>skip</code> will attempt to grow the buffer.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.string><a href=#StringBuilder.string aria-hidden=true>string(sb: StringBuilder) []u8</a></code>
+		<div class=desc>
+			<p>Returns the bytes written. Subsequent modifications to the <code>StringBuilder</code> may invalidate the returned data</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.truncate><a href=#StringBuilder.truncate aria-hidden=true>truncate(sb: *StringBuilder, n: usize) void</a></code>
+		<div class=desc>
+			<p>Truncates the data by <code>n</code> bytes. If <code>n</code> is greater than the length of the buffer, the length is set to 0. Does not free memory.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.write><a href=#StringBuilder.write aria-hidden=true>write(sb: *StringBuilder, data: []u8) !void</a></code>
+		<div class=desc>
+			<p>Appends <code>data</code>, growing the underlying buffer if needed</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeAssumeCapacity><a href=#StringBuilder.writeAssumeCapacity aria-hidden=true>writeAssumeCapacity(sb: *StringBuilder, data: []u8) void</a></code>
+		<div class=desc>
+			<p>Appends <code>data</code> assuming that the underlying buffer has enough free space. This method is slightly faster than <code>write</code> but is unsafe and should only be used in conjunction with <code><a href="#StringBuilder.ensureUnusedCapacity">ensureUnusedCapacity</a></code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeByte><a href=#StringBuilder.writeByte aria-hidden=true>writeByte(sb: *StringBuilder, b: u8) !void</a></code>
+		<div class=desc>
+			<p>Appends the byte, growing the underlying buffer if needed</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeByteAssumeCapacity><a href=#StringBuilder.writeByteAssumeCapacity aria-hidden=true>writeByteAssumeCapacity(sb: *StringBuilder, b: u8) void</a></code>
+		<div class=desc>
+			<p>Appends the byte assuming that the underlying buffer has enough free space. This method is slightly faster than <code>writeByte</code> but is unsafe and should only be used in conjunction with <code><a href="#StringBuilder.ensureUnusedCapacity">ensureUnusedCapacity</a></code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeByteNTimes><a href=#StringBuilder.writeByteNTimes aria-hidden=true>writeByteNTimes(sb: *StringBuilder, b: u8, n: usize) !void</a></code>
+		<div class=desc>
+			<p>Appends the byte <code>n</code> times, growing the underlying buffer if needed.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writer><a href=#StringBuilder.writer aria-hidden=true>writer(sb: *StringBuilder) std.io.Writer</a></code>
+		<div class=desc>
+			<p>Returns an <code>std.io.Writer</code>. This allows the <code>StringBuilder</code> to receive writes from a number of <code>std</code> and third party libraries, such as <code>std.json.stringify</code>.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=StringBuilder.int.methods><a href=#StringBuilder.wrinteInt.methods aria-hidden=true>WriteInt Methods</a></h3>
+<p>The <code>StringBuilder</code> exposes a variety of methods for writing integers. There's overlap between some of these functions in order to accommodate various styles/preferences.</p>
+
+<div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeU16><a href=#StringBuilder.writeU16 aria-hidden=true>writeU16(sb: *StringBuilder, value u16) !void</a></code>
+		<div class=desc>
+			<p>Writes an unsigned integer using the encoding defined by <code>sb.endian</code>.</p>
+			<p>Variants: <code>writeU32</code> and <code>writeU64</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeI16><a href=#StringBuilder.writeI16 aria-hidden=true>writeI16(sb: *StringBuilder, value i16) !void</a></code>
+		<div class=desc>
+			<p>Writes an signed integer using the encoding defined by <code>sb.endian</code>.</p>
+			<p>Variants: <code>writeI32</code> and <code>writeI64</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeU16Little><a href=#StringBuilder.writeU16Little aria-hidden=true>writeU16Little(sb: *StringBuilder, value u16) !void</a></code>
+		<div class=desc>
+			<p>Writes an unsigned integer using little endian encoding.</p>
+			<p>Variants: <code>writeU32Little</code> and <code>writeU64Little</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeI16Little><a href=#StringBuilder.writeI16Little aria-hidden=true>writeI16Little(sb: *StringBuilder, value u16) !void</a></code>
+		<div class=desc>
+			<p>Writes an signed integer using little endian encoding.</p>
+			<p>Variants: <code>writeI32Little</code> and <code>writeI64Little</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeU16Big><a href=#StringBuilder.writeU16Big aria-hidden=true>writeU16Big(sb: *StringBuilder, value u16) !void</a></code>
+		<div class=desc>
+			<p>Writes an unsigned integer using big endian encoding.</p>
+			<p>Variants: <code>writeU32Big</code> and <code>writeU64Big</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeI16Big><a href=#StringBuilder.writeI16Big aria-hidden=true>writeI16Big(sb: *StringBuilder, value u16) !void</a></code>
+		<div class=desc>
+			<p>Writes an signed integer using big endian encoding.</p>
+			<p>Variants: <code>writeI32Big</code> and <code>writeI64Big</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeInt><a href=#StringBuilder.writeInt aria-hidden=true>writeInt(sb: *StringBuilder, value anytype) !void</a></code>
+		<div class=desc>
+			<p>Writes an integer using the encoding defined by <code>sb.endian</code>. Type type of <code>value</code> determines how the value is encoded.</p>
+			<p>It is a compile-time error to pass a <code>comptime_int</code>. You must cast the constant.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=StringBuilder.writeIntAs><a href=#StringBuilder.writeIntAs aria-hidden=true>writeIntAs(sb: *StringBuilder, value anytype, endian: Endian) !void</a></code>
+		<div class=desc>
+			<p>Writes an integer using the specified endianness. Type type of <code>value</code> determines how the value is encoded.</p>
+			<p>It is a compile-time error to pass a <code>comptime_int</code>. You must cast the constant.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=View><a href=#View aria-hidden=true>View struct</a></h2>
+<p>When the <code><a href=#StringBuilder.skip>sb.skip()</a></code> method is called, a <code>View</code> is returned to backfill the skipped space. This is API exists to "reserve" space within the buffer for data unknown until a later point. The typical example is a length-prefixed message where the length is only known after the message has been written.</p>
+
+<p>The <code>View</code> exposes all of the same <code>write*</code> methods as the <code>StringBuilder</code>, but will not grow the buffer and <strong>does no bound-checking</strong>.</p>
