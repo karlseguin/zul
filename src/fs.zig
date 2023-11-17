@@ -132,6 +132,13 @@ pub const Iterator = struct {
 	const IterableDir = std.fs.IterableDir;
 	const Entry = IterableDir.Entry;
 
+	pub const Sort = enum{
+		none,
+		alphabetic,
+		dir_first,
+		dir_last,
+	};
+
 	pub fn deinit(self: *Iterator) void {
 		self.dir.close();
 		if (self.arena) |arena| {
@@ -149,7 +156,7 @@ pub const Iterator = struct {
 		return self.it.next();
 	}
 
-	pub fn all(self: *Iterator, allocator: Allocator, sort: bool) ![]std.fs.IterableDir.Entry {
+	pub fn all(self: *Iterator, allocator: Allocator, sort: Sort) ![]std.fs.IterableDir.Entry {
 		var arena = try allocator.create(std.heap.ArenaAllocator);
 		errdefer allocator.destroy(arena);
 
@@ -170,17 +177,33 @@ pub const Iterator = struct {
 
 		self.arena = arena;
 		var items = arr.items;
-		if (!sort) {
-			return items;
-		}
 
-		std.sort.pdq(Entry, items, {}, entryLessThan);
+		switch (sort) {
+			.alphabetic => std.sort.pdq(Entry, items, {}, sortEntriesAlphabetic),
+			.dir_first => std.sort.pdq(Entry, items, {}, sortEntriesDirFirst),
+			.dir_last => std.sort.pdq(Entry, items, {}, sortEntriesDirLast),
+			.none => {},
+		}
 		return items;
 	}
 
-	fn entryLessThan(ctx: void, a: Entry, b: Entry) bool {
+	fn sortEntriesAlphabetic(ctx: void, a: Entry, b: Entry) bool {
 		_ = ctx;
 		return std.ascii.lessThanIgnoreCase(a.name, b.name);
+	}
+	fn sortEntriesDirFirst(ctx: void, a: Entry, b: Entry) bool {
+		_ = ctx;
+		if (a.kind == b.kind) {
+			return std.ascii.lessThanIgnoreCase(a.name, b.name);
+		}
+		return a.kind == .directory;
+	}
+	fn sortEntriesDirLast(ctx: void, a: Entry, b: Entry) bool {
+		_ = ctx;
+		if (a.kind == b.kind) {
+			return std.ascii.lessThanIgnoreCase(a.name, b.name);
+		}
+		return a.kind != .directory;
 	}
 };
 
@@ -296,7 +319,7 @@ test "fs.readDir: all unsorted" {
 
 		var it = try readDir(dir_path);
 		defer it.deinit();
-		const entries = try it.all(t.allocator, false);
+		const entries = try it.all(t.allocator, .none);
 		for (entries) |entry| {
 			const found = expected.fetchRemove(entry.name) orelse {
 				std.debug.print("fs.iterate unknown entry: {s}", .{entry.name});
@@ -308,19 +331,54 @@ test "fs.readDir: all unsorted" {
 	}
 }
 
-test "fs.readDir: all sorted" {
+test "fs.readDir: sorted alphabetic" {
 	defer t.reset();
 	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
 		var it = try readDir(dir_path);
 		defer it.deinit();
 
-		const entries = try it.all(t.allocator, true);
-		try t.expectEqual(5, entries.len);
+		const entries = try it.all(t.allocator, .alphabetic);
+		try t.expectEqual(6, entries.len);
 		try t.expectEqual("lines", entries[0].name);
 		try t.expectEqual("long_line", entries[1].name);
 		try t.expectEqual("single_char", entries[2].name);
-		try t.expectEqual("sub", entries[3].name);
-		try t.expectEqual("test_struct.json", entries[4].name);
+		try t.expectEqual("sub-1", entries[3].name);
+		try t.expectEqual("sub-2", entries[4].name);
+		try t.expectEqual("test_struct.json", entries[5].name);
+	}
+}
+
+test "fs.readDir: sorted dir first" {
+	defer t.reset();
+	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
+		var it = try readDir(dir_path);
+		defer it.deinit();
+
+		const entries = try it.all(t.allocator, .dir_first);
+		try t.expectEqual(6, entries.len);
+		try t.expectEqual("sub-1", entries[0].name);
+		try t.expectEqual("sub-2", entries[1].name);
+		try t.expectEqual("lines", entries[2].name);
+		try t.expectEqual("long_line", entries[3].name);
+		try t.expectEqual("single_char", entries[4].name);
+		try t.expectEqual("test_struct.json", entries[5].name);
+	}
+}
+
+test "fs.readDir: sorted dir last" {
+	defer t.reset();
+	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
+		var it = try readDir(dir_path);
+		defer it.deinit();
+
+		const entries = try it.all(t.allocator, .dir_last);
+		try t.expectEqual(6, entries.len);
+		try t.expectEqual("lines", entries[0].name);
+		try t.expectEqual("long_line", entries[1].name);
+		try t.expectEqual("single_char", entries[2].name);
+		try t.expectEqual("test_struct.json", entries[3].name);
+		try t.expectEqual("sub-1", entries[4].name);
+		try t.expectEqual("sub-2", entries[5].name);
 	}
 }
 
@@ -340,7 +398,8 @@ fn testAbsoluteAndRelative(relative: []const u8) [2][]const u8 {
 
 fn testFsEntires() std.StringHashMap(std.fs.File.Kind) {
 	var map = std.StringHashMap(std.fs.File.Kind).init(t.arena.allocator());
-	map.put("sub", .directory) catch unreachable;
+	map.put("sub-1", .directory) catch unreachable;
+	map.put("sub-2", .directory) catch unreachable;
 	map.put("single_char", .file) catch unreachable;
 	map.put("lines", .file) catch unreachable;
 	map.put("long_line", .file) catch unreachable;

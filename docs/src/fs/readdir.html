@@ -24,7 +24,7 @@ while (try it.next()) |entry| {
 it.reset();
 
 // or can collect them into a slice, optionally sorted:
-const sorted_entries = try it.all(allocator, true);
+const sorted_entries = try it.all(allocator, .dir_first);
 for (sorted_entries) |entry| {
 	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
 }
@@ -50,11 +50,17 @@ for (sorted_entries) |entry| {
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Iterator.all><a href=#Iterator.all aria-hidden=true>all(self: *Iterator, allocator: Allocator, sort: bool) ![]Entry</a></code>
+		<code class=sig id=Iterator.all><a href=#Iterator.all aria-hidden=true>all(self: *Iterator, allocator: Allocator, sort: Sort) ![]Entry</a></code>
 		<div class=desc>
-			<p>Gets all remaining directory entries, optionally sorted in lexicographical order.</p>
+			<p>Gets all remaining directory entries. <code>sort</code> can be one of four values:</p>
+			<ul>
+				<li><code>none</code> - no sorting.
+				<li><code>alphabetic</code> - sorted alphabetically.
+				<li><code>dir_first</code> - sorted alphabetically with directories first.
+				<li><code>dir_last</code> - sorted alphabetically with directories last.
+			</ul>
 
-			<p>Normally, the <code>entry.name</code> is only valid up until the next iteration. In order to collect all entries, this function clones the names. Internally this, along with the <code>std.ArrayList</code> used to collect the entries, are managed by an <code>ArenaAllocator</code>, which is cleared on <code><a href=#Iterator.deinit>deinit</a></code>. Compared to simply iterating through the entries one at a time, this adds considerable overhead. But, if you need all entries, sorted or otherwise, there isn't really any other option. If you don't, prefer using the standard libraries <code>std.fs.IterableDir</code> directly.</p>
+			<p>Normally, the <code>entry.name</code> is only valid up until the next iteration. In order to collect all entries, this function clones the names. Internally this, along with the <code>std.ArrayList</code> used to collect the entries, are managed by an <code>ArenaAllocator</code>, which is cleared on <code><a href=#Iterator.deinit>deinit</a></code>. Compared to simply iterating through the entries one at a time, this adds considerable overhead. But, if you need all entries, sorted or otherwise, this cloning is necessary. If you don't, prefer using the standard libraries <code>std.fs.IterableDir</code> directly.</p>
 		</div>
 	</div>
 	<div class=member>

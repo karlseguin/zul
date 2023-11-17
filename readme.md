@@ -57,7 +57,7 @@ while (try it.next()) |entry| {
 it.reset();
 
 // or can collect them into a slice, optionally sorted:
-const sorted_entries = try it.all(allocator, true);
+const sorted_entries = try it.all(allocator, .dir_first);
 for (sorted_entries) |entry| {
 	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
 }
