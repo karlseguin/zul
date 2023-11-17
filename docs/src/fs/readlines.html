@@ -19,7 +19,8 @@ var it = try zul.fs.readlines("/tmp/data.txt", &line_buffer, .{});
 defer it.deinit();
 
 while (it.next()) |line| {
-	// line is only valid until the next call to it.next or it.deinit
+	// line is only valid until the next call to
+	// it.next() or it.deinit()
 	std.debug.print("line: {s}\n", .{line});
 }
 

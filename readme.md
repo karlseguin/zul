@@ -3,7 +3,7 @@ The purpose of this library is to enhance Zig's standard library. Much of zul wr
 
 Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can easily be copy and pasted into an existing library or project.
 
-Full documentation is available at: [https://wwww.goblgobl.com/zul/](https://wwww.goblgobl.com/zul/).
+Full documentation is available at: [https://www.goblgobl.com/zul/](https://wwww.goblgobl.com/zul/).
 
 ## [zul.benchmark.run](https://www.goblgobl.com/zul/benchmark/)
 Simple benchmarking function.
@@ -12,22 +12,22 @@ Simple benchmarking function.
 const HAYSTACK = "abcdefghijklmnopqrstvuwxyz0123456789";
 
 pub fn main() !void {
-    (try zul.benchmark.run(indexOfScalar, .{})).print("indexOfScalar");
-    (try zul.benchmark.run(lastIndexOfScalar, .{})).print("lastIndexOfScalar");
+	(try zul.benchmark.run(indexOfScalar, .{})).print("indexOfScalar");
+	(try zul.benchmark.run(lastIndexOfScalar, .{})).print("lastIndexOfScalar");
 }
 
 fn indexOfScalar(_: Allocator, _: *std.time.Timer) !void {
-    const i = std.mem.indexOfScalar(u8, HAYSTACK, '9').?;
-    if (i != 35) {
-        @panic("fail");
-    }
+	const i = std.mem.indexOfScalar(u8, HAYSTACK, '9').?;
+	if (i != 35) {
+		@panic("fail");
+	}
 }
 
 fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
-    const i = std.mem.lastIndexOfScalar(u8, HAYSTACK, 'a').?;
-    if (i != 0) {
-        @panic("fail");
-    }
+	const i = std.mem.lastIndexOfScalar(u8, HAYSTACK, 'a').?;
+	if (i != 0) {
+		@panic("fail");
+	}
 }
 
 // indexOfScalar
@@ -37,10 +37,27 @@ fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
 // lastIndexOfScalar
 //   20993066 iterations   142.15ns per iterations
 //   worst: 292ns  median: 125ns   stddev: 23.13nsfn myfunc(_: Allocator, timer: *std.time.Timer) !void {
-    // some expensive setup
-    timer.reset();
-    // code to benchmark
+	// some expensive setup
+	timer.reset();
+	// code to benchmark
 }
+```
+
+## [zul.fs.readJson](https://www.goblgobl.com/zul/fs/readjson/)
+Reads and parses a JSON file.
+
+```zig
+// Parameters:
+// 1- The type to parse the JSON data into
+// 2- An allocator
+// 3- Absolute or relative path
+// 4- std.json.ParseOptions
+const managed_user = try zul.fs.readJson(User, allocator, "/tmp/data.json", .{});
+
+// readJson returns a zul.Managed(T)
+// managed_user.value is valid until managed_user.deinit() is called
+defer managed_user.deinit();
+const user = managed_user.value;
 ```
 
 ## [zul.fs.readLines](https://www.goblgobl.com/zul/fs/readlines/)
@@ -58,8 +75,9 @@ var it = try zul.fs.readlines("/tmp/data.txt", &line_buffer, .{});
 defer it.deinit();
 
 while (it.next()) |line| {
-    // line is only valid until the next call to it.next or it.deinit
-    std.debug.print("line: {s}\n", .{line});
+	// line is only valid until the next call to
+	// it.next() or it.deinit()
+	std.debug.print("line: {s}\n", .{line});
 }
 
 // At the end of the file, and on error, next() will return null
@@ -105,38 +123,38 @@ Helpers for writing tests.
 const t = zul.testing;
 
 test "memcpy" {
-    // clear's the arena allocator
-    defer t.reset();
+	// clear's the arena allocator
+	defer t.reset();
 
-    // In addition to exposing std.testing.allocator as zul.testing.allocator
-    // zul.testing.arena is an ArenaAllocator. An ArenaAllocator can
-    // make managing test-specific allocations a lot simpler.
-    // Just stick a `defer zul.testing.reset()` atop your test.
-    var buf = try t.arena.allocator().alloc(u8, 5);
+	// In addition to exposing std.testing.allocator as zul.testing.allocator
+	// zul.testing.arena is an ArenaAllocator. An ArenaAllocator can
+	// make managing test-specific allocations a lot simpler.
+	// Just stick a `defer zul.testing.reset()` atop your test.
+	var buf = try t.arena.allocator().alloc(u8, 5);
 
-    // unlike std.testing.expectEqual, zul's expectEqual
-    // will coerce expected to actual's type, so this is valid:
-    try t.expectEqual(5, buf.len);
+	// unlike std.testing.expectEqual, zul's expectEqual
+	// will coerce expected to actual's type, so this is valid:
+	try t.expectEqual(5, buf.len);
 
-    @memcpy(buf[0..5], "hello");
+	@memcpy(buf[0..5], "hello");
 
-    // zul's expectEqual also works with strings.
-    try t.expectEqual("hello", buf);
+	// zul's expectEqual also works with strings.
+	try t.expectEqual("hello", buf);
 }const t = zul.testing;
 test "readLines" {
-    // clears the arena
-    defer t.reset();
+	// clears the arena
+	defer t.reset();
 
-    const aa = t.arena.allocator();
-    const path = try std.fs.cwd().realpathAlloc(aa, "tests/sample");
+	const aa = t.arena.allocator();
+	const path = try std.fs.cwd().realpathAlloc(aa, "tests/sample");
 
-    var out: [30]u8 = undefined;
-    var it = try readLines(path, &out, .{});
-    defer it.deinit();
+	var out: [30]u8 = undefined;
+	var it = try readLines(path, &out, .{});
+	defer it.deinit();
 
-    try t.expectEqual("Consider Phlebas", it.next().?);
-    try t.expectEqual("Old Man's War", it.next().?);
-    try t.expectEqual(null, it.next());
+	try t.expectEqual("Consider Phlebas", it.next().?);
+	try t.expectEqual("Old Man's War", it.next().?);
+	try t.expectEqual(null, it.next());
 }
 ```
 
@@ -157,3 +175,5 @@ std.debug.print("{any}\n", uuid1.eql(uuid2));
 // zul.uuid.UUID can be JSON serialized
 try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
 ```
+
+

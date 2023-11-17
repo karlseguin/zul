@@ -1,0 +1,53 @@
+---
+layout: site.njk
+title: zul.fs.readJson
+---
+
+<h1 id=zul.fs.readJson><a href=#zul.fs.readJson aria-hidden=true>zul.fs.readJson</a></h1>
+<p>Reads and parses a JSON file.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// Parameters:
+// 1- The type to parse the JSON data into
+// 2- An allocator
+// 3- Absolute or relative path
+// 4- std.json.ParseOptions
+const managed_user = try zul.fs.readJson(User, allocator, "/tmp/data.json", .{});
+
+// readJson returns a zul.Managed(T)
+// managed_user.value is valid until managed_user.deinit() is called
+defer managed_user.deinit();
+const user = managed_user.value;
+{% endhighlight %}
+
+<h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
+<div>
+	<div class=member>
+		<code class=sig id=v4>comptime T: type</code>
+		<div class=desc><p>The type to parse to.</p></div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>allocator: std.mem.Allocator</code>
+		<div class=desc><p>The allocator to use for any memory allocations needed to parse the JSON or create <code>T</code>.</p></div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>path: []const u8</code>
+		<div class=desc><p>Absolute or relative path to the file.</p></div>
+	</div>
+	<div class=member>
+		<code class=sig id=v4>opts: std.json.ParseOptions</code>
+		<div class=desc>
+			<p>Options that control the parsing. The <code>allocate</code> field will be forced to <code>alloc_always</code>.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=return><a href=#return aria-hidden=true>Return</a></h2>
+<p>On success, <code>readJson(T, ...)</code> returns a <code>zul.Managed(T)</code> which exposes a <code>deinit()</code> method as well as the the parsed value in the <code>value: T</code> field.</p>
+
+<p>Parsing JSON and creating <code>T</code> likely requires memory allocations. These allocations are done within an <code>std.heap.ArenaAllocator</code>. Thus, the parsed <code>value: T</code> has a lifetime tied to the arena. When <code>zul.Manage(T).deinit()</code> is called, the arena is cleared and freed.</p>
+
+<p><code>zul.Manage</code> is a renamed <code>std.json.Parsed(T)</code> (I dislike the name <code>std.json.Parsed(T)</code> because it represents data and behavior that has nothing to with with JSON or parsing).</p>
+
+<p>I wrote a blob post, <a href="https://www.openmymind.net/Zigs-std-json-Parsed/">Zig's std.json.Parsed(T)</a>, explaining this pattern.</p>

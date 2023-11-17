@@ -69,7 +69,7 @@ pub const Random = struct {
 };
 
 const t = @This();
-test "testing: rand bytes" {
+test "testing.rand: bytes" {
 	defer t.reset();
 	for (0..10) |_| {
 		const bytes = Random.bytes(4, 8);
@@ -77,7 +77,7 @@ test "testing: rand bytes" {
 	}
 }
 
-test "testing: rand fillAtLeast" {
+test "testing.rand: fillAtLeast" {
 	var buf: [10]u8 = undefined;
 
 	for (0..10) |_| {
@@ -86,7 +86,7 @@ test "testing: rand fillAtLeast" {
 	}
 }
 
-test "testing: rand intRange" {
+test "testing.rand: intRange" {
 	for (0..10) |_| {
 		var value = Random.intRange(u16, 3, 6);
 		try t.expectEqual(true, value >= 3 and value <= 6);

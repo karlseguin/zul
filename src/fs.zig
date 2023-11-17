@@ -1,6 +1,8 @@
 const std = @import("std");
 const zul = @import("zul.zig");
 
+const Allocator = std.mem.Allocator;
+
 pub const LineIterator = LineIteratorSize(4096);
 
 // Made into a generic so that we can efficiently test files larger than buffer
@@ -97,6 +99,26 @@ pub fn readLinesSize(comptime size: usize, file_path: []const u8, out: []u8, opt
 	};
 }
 
+pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, opts: std.json.ParseOptions) !zul.Managed(T) {
+	const file = blk: {
+		if (std.fs.path.isAbsolute(file_path)) {
+			break :blk try std.fs.openFileAbsolute(file_path, .{});
+		} else {
+			break :blk try std.fs.cwd().openFile(file_path, .{});
+		}
+	};
+	defer file.close();
+
+	var buffered = std.io.bufferedReader(file.reader());
+	var reader = std.json.reader(allocator, buffered.reader());
+	defer reader.deinit();
+
+	var o = opts;
+	o.allocate = .alloc_always;
+	const parsed = try std.json.parseFromTokenSource(T, allocator, &reader, o);
+	return zul.Managed(T).fromJson(parsed);
+}
+
 const t = zul.testing;
 test "fs.readLines: file not found" {
 	var out = [_]u8{};
@@ -156,6 +178,32 @@ test "fs.readLines: multiple lines" {
 		try it.err();
 	}
 }
+
+test "fs.readJson: file not found" {
+	try t.expectError(error.FileNotFound, readJson(TestStruct, t.allocator, "tests/does_not_exist", .{}));
+	try t.expectError(error.FileNotFound, readJson(TestStruct, t.allocator, "/tmp/zul/tests/does_not_exist", .{}));
+}
+
+test "fs.readJson: invalid json" {
+	try t.expectError(error.SyntaxError, readJson(TestStruct, t.allocator, "tests/fs/lines", .{}));
+}
+
+test "fs.readJson: success" {
+	defer t.reset();
+	for (testAbsoluteAndRelative("tests/fs/test_struct.json")) |file_path| {
+		const s = try readJson(TestStruct, t.allocator, file_path, .{});
+		defer s.deinit();
+		try t.expectEqual(9001, s.value.id);
+		try t.expectEqual("Goku", s.value.name);
+		try t.expectEqual("c", s.value.tags[2]);
+	}
+}
+
+const TestStruct = struct{
+	id: i32,
+	name: []const u8,
+	tags: [][]const u8,
+};
 
 fn testAbsoluteAndRelative(relative: []const u8) [2][]const u8 {
 	const allocator = t.arena.allocator();
