@@ -43,6 +43,30 @@ fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
 }
 ```
 
+## [zul.fs.readDir](https://www.goblgobl.com/zul/fs/readdir/)
+Iterates, non-recursively, through a directory.
+
+```zig
+// Parameters:
+// 1- Absolute or relative directory path
+var it = try zul.fs.readDir("/tmp/dir");
+defer it.deinit();
+
+// can iterate through the files
+while (try it.next()) |entry| {
+	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
+}
+
+// reset the iterator
+it.reset();
+
+// or can collect them into a slice, optionally sorted:
+const sorted_entries = try it.all(allocator, true);
+for (sorted_entries) |entry| {
+	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
+}
+```
+
 ## [zul.fs.readJson](https://www.goblgobl.com/zul/fs/readjson/)
 Reads and parses a JSON file.
 
@@ -74,18 +98,11 @@ var line_buffer: [1024]u8 = undefined;
 var it = try zul.fs.readlines("/tmp/data.txt", &line_buffer, .{});
 defer it.deinit();
 
-while (it.next()) |line| {
+while (try it.next()) |line| {
 	// line is only valid until the next call to
 	// it.next() or it.deinit()
 	std.debug.print("line: {s}\n", .{line});
 }
-
-// At the end of the file, and on error, next() will return null
-// We must check it.err() to see if an error was encountered.
-// This approach makes it easier to catch the error compared
-// to having to do it on the call to next().
-try it.err();// note the "try"
-while (try it.next()) |line| { ... }
 ```
 
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)

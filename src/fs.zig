@@ -109,6 +109,81 @@ pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, o
 	return zul.Managed(T).fromJson(parsed);
 }
 
+pub fn readDir(dir_path: []const u8) !Iterator {
+	const dir = blk: {
+		if (std.fs.path.isAbsolute(dir_path)) {
+			break :blk try std.fs.openIterableDirAbsolute(dir_path, .{});
+		} else {
+			break :blk try std.fs.cwd().openIterableDir(dir_path, .{});
+		}
+	};
+
+	return .{
+		.dir = dir,
+		.it = dir.iterate(),
+	};
+}
+
+pub const Iterator = struct {
+	dir: IterableDir,
+	it: IterableDir.Iterator,
+	arena: ?*std.heap.ArenaAllocator = null,
+
+	const IterableDir = std.fs.IterableDir;
+	const Entry = IterableDir.Entry;
+
+	pub fn deinit(self: *Iterator) void {
+		self.dir.close();
+		if (self.arena) |arena| {
+			const allocator = arena.child_allocator;
+			arena.deinit();
+			allocator.destroy(arena);
+		}
+	}
+
+	pub fn reset(self: *Iterator) void {
+		self.it.reset();
+	}
+
+	pub fn next(self: *Iterator) !?std.fs.IterableDir.Entry{
+		return self.it.next();
+	}
+
+	pub fn all(self: *Iterator, allocator: Allocator, sort: bool) ![]std.fs.IterableDir.Entry {
+		var arena = try allocator.create(std.heap.ArenaAllocator);
+		errdefer allocator.destroy(arena);
+
+		arena.* = std.heap.ArenaAllocator.init(allocator);
+		errdefer arena.deinit();
+
+		const aa = arena.allocator();
+
+		var arr = std.ArrayList(Entry).init(aa);
+
+		var it = self.it;
+		while (try it.next()) |entry| {
+			try arr.append(.{
+				.kind = entry.kind,
+				.name = try aa.dupe(u8, entry.name),
+			});
+		}
+
+		self.arena = arena;
+		var items = arr.items;
+		if (!sort) {
+			return items;
+		}
+
+		std.sort.pdq(Entry, items, {}, entryLessThan);
+		return items;
+	}
+
+	fn entryLessThan(ctx: void, a: Entry, b: Entry) bool {
+		_ = ctx;
+		return std.ascii.lessThanIgnoreCase(a.name, b.name);
+	}
+};
+
 const t = zul.testing;
 test "fs.readLines: file not found" {
 	var out = [_]u8{};
@@ -185,6 +260,70 @@ test "fs.readJson: success" {
 	}
 }
 
+test "fs.readDir: dir not found" {
+	try t.expectError(error.FileNotFound, readDir("tests/fs/not_found"));
+	try t.expectError(error.FileNotFound, readDir("/tmp/zul/tests/fs/not_found"));
+}
+
+test "fs.readDir: iterate" {
+	defer t.reset();
+
+	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
+		var it = try readDir(dir_path);
+		defer it.deinit();
+
+		//loop twice, it.reset() should allow a re-iteration
+		for (0..2) |_| {
+			it.reset();
+			var expected = testFsEntires();
+
+			while (try it.next()) |entry| {
+				const found = expected.fetchRemove(entry.name) orelse {
+					std.debug.print("fs.iterate unknown entry: {s}", .{entry.name});
+					return error.UnknownEntry;
+				};
+				try t.expectEqual(found.value, entry.kind);
+			}
+			try t.expectEqual(0, expected.count());
+		}
+	}
+}
+
+test "fs.readDir: all unsorted" {
+	defer t.reset();
+	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
+		var expected = testFsEntires();
+
+		var it = try readDir(dir_path);
+		defer it.deinit();
+		const entries = try it.all(t.allocator, false);
+		for (entries) |entry| {
+			const found = expected.fetchRemove(entry.name) orelse {
+				std.debug.print("fs.iterate unknown entry: {s}", .{entry.name});
+				return error.UnknownEntry;
+			};
+			try t.expectEqual(found.value, entry.kind);
+		}
+		try t.expectEqual(0, expected.count());
+	}
+}
+
+test "fs.readDir: all sorted" {
+	defer t.reset();
+	for (testAbsoluteAndRelative("tests/fs")) |dir_path| {
+		var it = try readDir(dir_path);
+		defer it.deinit();
+
+		const entries = try it.all(t.allocator, true);
+		try t.expectEqual(5, entries.len);
+		try t.expectEqual("lines", entries[0].name);
+		try t.expectEqual("long_line", entries[1].name);
+		try t.expectEqual("single_char", entries[2].name);
+		try t.expectEqual("sub", entries[3].name);
+		try t.expectEqual("test_struct.json", entries[4].name);
+	}
+}
+
 const TestStruct = struct{
 	id: i32,
 	name: []const u8,
@@ -197,4 +336,14 @@ fn testAbsoluteAndRelative(relative: []const u8) [2][]const u8 {
 		allocator.dupe(u8, relative) catch unreachable,
 		std.fs.cwd().realpathAlloc(allocator, relative) catch unreachable,
 	};
+}
+
+fn testFsEntires() std.StringHashMap(std.fs.File.Kind) {
+	var map = std.StringHashMap(std.fs.File.Kind).init(t.arena.allocator());
+	map.put("sub", .directory) catch unreachable;
+	map.put("single_char", .file) catch unreachable;
+	map.put("lines", .file) catch unreachable;
+	map.put("long_line", .file) catch unreachable;
+	map.put("test_struct.json", .file) catch unreachable;
+	return map;
 }

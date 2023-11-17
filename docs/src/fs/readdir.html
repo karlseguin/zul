@@ -1,0 +1,79 @@
+---
+layout: site.njk
+title: zul.fs.readDir
+---
+
+<h1 id=zul.fs.readDir><a href=#zul.fs.readDir aria-hidden=true>zul.fs.readDir</a></h1>
+<p>Iterates, non-recursively, through a directory.</p>
+
+<p>This is a thin abstraction over the standard libraries <code>IterableDir.iterate()</code> behavior. The main benefit of <code>zul.fs.readDir</code> is the ability collect all entries, sorted or not, in a slice.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// Parameters:
+// 1- Absolute or relative directory path
+var it = try zul.fs.readDir("/tmp/dir");
+defer it.deinit();
+
+// can iterate through the files
+while (try it.next()) |entry| {
+	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
+}
+
+// reset the iterator
+it.reset();
+
+// or can collect them into a slice, optionally sorted:
+const sorted_entries = try it.all(allocator, true);
+for (sorted_entries) |entry| {
+	std.debug.print("{s} {any}\n", .{entry.name, entry.kind});
+}
+{% endhighlight %}
+
+<h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
+<div>
+	<div class=member>
+		<code class=sig id=v4>path: []const u8</code>
+		<div class=desc><p>Absolute or relative path to the directory.</p></div>
+	</div>
+</div>
+
+<h2 id=Iterator><a href=#Iterator aria-hidden=true>Iterator struct</a></h2>
+<p>On success, <code>readDir</code> returns an <code>Iterator</code>.</p>
+
+<h3 id=Iterator.methods><a href=#Iterator.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=sig id=Iterator.deinit><a href=#Iterator.deinit aria-hidden=true>deinit(self: Iterator) void</a></code>
+		<div class=desc>
+			<p>Releases the underlying operating system resources. Frees memory allocated by <code><a href="#Iterator.all">all</a></code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Iterator.all><a href=#Iterator.all aria-hidden=true>all(self: *Iterator, allocator: Allocator, sort: bool) ![]Entry</a></code>
+		<div class=desc>
+			<p>Gets all remaining directory entries, optionally sorted in lexicographical order.</p>
+
+			<p>Normally, the <code>entry.name</code> is only valid up until the next iteration. In order to collect all entries, this function clones the names. Internally this, along with the <code>std.ArrayList</code> used to collect the entries, are managed by an <code>ArenaAllocator</code>, which is cleared on <code><a href=#Iterator.deinit>deinit</a></code>. Compared to simply iterating through the entries one at a time, this adds considerable overhead. But, if you need all entries, sorted or otherwise, there isn't really any other option. If you don't, prefer using the standard libraries <code>std.fs.IterableDir</code> directly.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Iterator.next><a href=#Iterator.next aria-hidden=true>next(self: *Iterator) !?Entry</a></code>
+		<div class=desc>
+			<p>Returns the next directory entry, or <code>null</code> if there are no more entries.</p>
+
+			<p>The returned entry is only valid until the next call to <code>next</code>, <code>deinit</code> or <code>reset</code>.</p>
+
+			<p>The order of iteration depends on the file system, but generally no guarantee is made. Whether or not entries added/removed during iteration are seen by the iterator depends also depends on the file system.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=sig id=Iterator.reset><a href=#Iterator.reset aria-hidden=true>reset(self: *Iterator) void</a></code>
+		<div class=desc>
+			<p>Resets the iterator. Once reset, the iterator can be iterated again from the start.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Entry><a href=#Entry aria-hidden=true>Entry struct</a></h2>
+<p><code>Entry</code> is an <code>std.fs.IterableDir.Entry</code> which has two fields: <code>name: []const u8</code> and <code>kind: std.fs.File.Kind</code>.</p>
