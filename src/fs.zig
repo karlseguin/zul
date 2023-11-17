@@ -8,7 +8,6 @@ pub const LineIterator = LineIteratorSize(4096);
 // Made into a generic so that we can efficiently test files larger than buffer
 pub fn LineIteratorSize(comptime size: usize) type {
 	return struct {
-		_err: ?anyerror,
 		out: []u8,
 		delimiter: u8,
 		file: std.fs.File,
@@ -25,11 +24,7 @@ pub fn LineIteratorSize(comptime size: usize) type {
 			self.file.close();
 		}
 
-		pub fn err(self: Self) anyerror!void {
-			if (self._err) |e| return e;
-		}
-
-		pub fn next(self: *Self) ?[]u8 {
+		pub fn next(self: *Self) !?[]u8 {
 			const delimiter = self.delimiter;
 
 			var out = self.out;
@@ -44,8 +39,7 @@ pub fn LineIteratorSize(comptime size: usize) type {
 
 				const written_end = written + pos;
 				if (written_end > out.len - written) {
-					self._err = error.StreamTooLong;
-					return null;
+					return error.StreamTooLong;
 				}
 				@memcpy(out[written..written_end], buffered.buf[start..delimiter_pos]);
 				written = written_end;
@@ -62,10 +56,7 @@ pub fn LineIteratorSize(comptime size: usize) type {
 				}
 
 				// fill our buffer
-				const n = buffered.unbuffered_reader.read(buffered.buf[0..]) catch |e| {
-					self._err = e;
-					return null;
-				};
+				const n = try buffered.unbuffered_reader.read(buffered.buf[0..]);
 				if (n == 0) {
 						return null;
 				}
@@ -91,7 +82,6 @@ pub fn readLinesSize(comptime size: usize, file_path: []const u8, out: []u8, opt
 
 	const buffered = std.io.bufferedReaderSize(size, file.reader());
 	return .{
-		._err = null,
 		.out = out,
 		.file = file,
 		.buffered = buffered,
@@ -132,8 +122,7 @@ test "fs.readLines: empty" {
 	for (testAbsoluteAndRelative("tests/empty")) |file_path| {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
-		try t.expectEqual(null, it.next());
-		try it.err();
+		try t.expectEqual(null, try it.next());
 	}
 }
 
@@ -143,9 +132,8 @@ test "fs.readLines: single char" {
 	for (testAbsoluteAndRelative("tests/fs/single_char")) |file_path| {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
-		try t.expectEqual("l", it.next().?);
-		try t.expectEqual(null, it.next());
-		try it.err();
+		try t.expectEqual("l", (try it.next()).?);
+		try t.expectEqual(null, try it.next());
 	}
 }
 
@@ -155,8 +143,7 @@ test "fs.readLines: larger than out" {
 	for (testAbsoluteAndRelative("tests/fs/long_line")) |file_path| {
 		var it = try readLines(file_path, &out, .{});
 		defer it.deinit();
-		try t.expectEqual(null, it.next());
-		try t.expectEqual(error.StreamTooLong, it.err());
+		try t.expectError(error.StreamTooLong, it.next());
 	}
 }
 
@@ -166,16 +153,15 @@ test "fs.readLines: multiple lines" {
 	for (testAbsoluteAndRelative("tests/fs/lines")) |file_path| {
 		var it = try readLinesSize(20, file_path, &out, .{});
 		defer it.deinit();
-		try t.expectEqual("Consider Phlebas", it.next().?);
-		try t.expectEqual("Old Man's War", it.next().?);
-		try t.expectEqual("Hyperion", it.next().?);
-		try t.expectEqual("Under Heaven", it.next().?);
-		try t.expectEqual("Project Hail Mary", it.next().?);
-		try t.expectEqual("Roadside Picnic", it.next().?);
-		try t.expectEqual("The Fifth Season", it.next().?);
-		try t.expectEqual("Sundiver", it.next().?);
-		try t.expectEqual(null, it.next());
-		try it.err();
+		try t.expectEqual("Consider Phlebas", (try it.next()).?);
+		try t.expectEqual("Old Man's War", (try it.next()).?);
+		try t.expectEqual("Hyperion", (try it.next()).?);
+		try t.expectEqual("Under Heaven", (try it.next()).?);
+		try t.expectEqual("Project Hail Mary", (try it.next()).?);
+		try t.expectEqual("Roadside Picnic", (try it.next()).?);
+		try t.expectEqual("The Fifth Season", (try it.next()).?);
+		try t.expectEqual("Sundiver", (try it.next()).?);
+		try t.expectEqual(null, try it.next());
 	}
 }
 
