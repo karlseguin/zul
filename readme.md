@@ -36,11 +36,7 @@ fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
 //
 // lastIndexOfScalar
 //   20993066 iterations   142.15ns per iterations
-//   worst: 292ns  median: 125ns   stddev: 23.13nsfn myfunc(_: Allocator, timer: *std.time.Timer) !void {
-	// some expensive setup
-	timer.reset();
-	// code to benchmark
-}
+//   worst: 292ns  median: 125ns   stddev: 23.13ns
 ```
 
 ## [zul.fs.readDir](https://www.goblgobl.com/zul/fs/readdir/)
@@ -157,21 +153,6 @@ test "memcpy" {
 
 	// zul's expectEqual also works with strings.
 	try t.expectEqual("hello", buf);
-}const t = zul.testing;
-test "readLines" {
-	// clears the arena
-	defer t.reset();
-
-	const aa = t.arena.allocator();
-	const path = try std.fs.cwd().realpathAlloc(aa, "tests/sample");
-
-	var out: [30]u8 = undefined;
-	var it = try readLines(path, &out, .{});
-	defer it.deinit();
-
-	try t.expectEqual("Consider Phlebas", it.next().?);
-	try t.expectEqual("Old Man's War", it.next().?);
-	try t.expectEqual(null, it.next());
 }
 ```
 

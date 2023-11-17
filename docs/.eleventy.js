@@ -26,7 +26,7 @@ module.exports = function(config) {
 
 	config.addNunjucksGlobal('postMeta', function(post) {
 		const $ = cheerio.load(post.content);
-		const example = $('pre:first-of-type');
+		const example = $('pre').eq(0);
 		return {
 			desc: $('p').eq(0).text(),
 			example: {raw: example.text(), html: example.prop('outerHTML')},
