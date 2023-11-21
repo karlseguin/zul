@@ -171,7 +171,7 @@ pub const StringBuilder = struct {
 
 	pub fn copy(self: StringBuilder, allocator: Allocator) ![]u8 {
 		const pos = self.pos;
-		var c = try allocator.alloc(u8, pos);
+		const c = try allocator.alloc(u8, pos);
 		@memcpy(c, self.buf[0..pos]);
 		return c;
 	}

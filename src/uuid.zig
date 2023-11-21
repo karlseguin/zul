@@ -159,7 +159,7 @@ test "uuid: parse invalid" {
 
 test "uuid: v4" {
 	defer t.reset();
-	var allocator = t.arena.allocator();
+	const allocator = t.arena.allocator();
 	var seen = std.StringHashMap(void).init(allocator);
 	try seen.ensureTotalCapacity(100);
 
@@ -195,7 +195,7 @@ test "uuid: hex" {
 
 test "uuid: json" {
 	defer t.reset();
-	var uuid = try parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
+	const uuid = try parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
 	var out = std.ArrayList(u8).init(t.arena.allocator());
 
 	try std.json.stringify(.{
@@ -206,7 +206,7 @@ test "uuid: json" {
 }
 
 test "uuid: format" {
-	var uuid = try parse("d543E371-a33d-4e68-87ba-7c9e3470a3be");
+	const uuid = try parse("d543E371-a33d-4e68-87ba-7c9e3470a3be");
 
 	var buf: [50]u8 = undefined;
 
@@ -228,6 +228,7 @@ test "uuid: format" {
 
 test "uuid: eql" {
 	const uuid1 = v4();
+	std.debug.print("{any} {s}\n", .{uuid1.bin, uuid1.toHex(.lower)});
 	const uuid2 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
 	const uuid3 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
 	const uuid4 = try parse("5cc75a16-8592-4de3-8215-89824a9c62c0");

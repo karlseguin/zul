@@ -176,7 +176,7 @@ pub const Iterator = struct {
 		}
 
 		self.arena = arena;
-		var items = arr.items;
+		const items = arr.items;
 
 		switch (sort) {
 			.alphabetic => std.sort.pdq(Entry, items, {}, sortEntriesAlphabetic),

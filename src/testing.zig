@@ -81,14 +81,14 @@ test "testing.rand: fillAtLeast" {
 	var buf: [10]u8 = undefined;
 
 	for (0..10) |_| {
-		var bytes = Random.fillAtLeast(&buf, 7);
+		const bytes = Random.fillAtLeast(&buf, 7);
 		try t.expectEqual(true, bytes.len >= 7 and bytes.len <= 10);
 	}
 }
 
 test "testing.rand: intRange" {
 	for (0..10) |_| {
-		var value = Random.intRange(u16, 3, 6);
+		const value = Random.intRange(u16, 3, 6);
 		try t.expectEqual(true, value >= 3 and value <= 6);
 	}
 }
