@@ -28,15 +28,15 @@ while (try it.next()) |line| {
 <h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=v4>path: []const u8</code>
+		<code class=name id=v4>path: []const u8</code>
 		<div class=desc><p>Absolute or relative path to the file.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=v4>buf: []const u8</code>
+		<code class=name id=v4>buf: []const u8</code>
 		<div class=desc><p>Buffer to write the line into, the buffer length represents the maximum allowed line. If a line is longer than <code>buf.len</code> <code><a href="#next">next()</a></code> will return <code>error.StreamTooLong</code>.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=v4>opts: zul.fs.LineIterator.Opts</code>
+		<code class=name id=v4>opts: zul.fs.LineIterator.Opts</code>
 		<div class=desc>
 			<p>Options that control the iterator.</p>
 			<ul>
@@ -53,13 +53,13 @@ while (try it.next()) |line| {
 <h3 id=LineIterator.methods><a href=#LineIterator.methods aria-hidden=true>Methods</a></h3>
 <div>
 	<div class=member>
-		<code class=sig id=LineIterator.deinit><a href=#LineIterator.deinit aria-hidden=true>deinit(self: LineIterator)</a></code>
+		<code class=name id=LineIterator.deinit><a href=#LineIterator.deinit aria-hidden=true>deinit(self: LineIterator)</a></code>
 		<div class=desc>
 			<p>Releases the resources associated with the iterator (i.e. it closes the file). This must be called the the iterator is no longer needed.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=LineIterator.next><a href=#LineIterator.next aria-hidden=true>next(self: LineIterator) !?[]u8</a></code>
+		<code class=name id=LineIterator.next><a href=#LineIterator.next aria-hidden=true>next(self: LineIterator) !?[]u8</a></code>
 		<div class=desc>
 			<p>Returns the next line, or <code>null</code> if the the end of the file has been reached . The return value is only valid until the next call to <code>next</code> or <code>deinit</code>.</p>
 		</div>

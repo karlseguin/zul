@@ -24,19 +24,19 @@ const user = managed_user.value;
 <h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=v4>comptime T: type</code>
+		<code class=name id=v4>comptime T: type</code>
 		<div class=desc><p>The type to parse to.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=v4>allocator: std.mem.Allocator</code>
+		<code class=name id=v4>allocator: std.mem.Allocator</code>
 		<div class=desc><p>The allocator to use for any memory allocations needed to parse the JSON or create <code>T</code>.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=v4>path: []const u8</code>
+		<code class=name id=v4>path: []const u8</code>
 		<div class=desc><p>Absolute or relative path to the file.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=v4>opts: std.json.ParseOptions</code>
+		<code class=name id=v4>opts: std.json.ParseOptions</code>
 		<div class=desc>
 			<p>Options that control the parsing. The <code>allocate</code> field will be forced to <code>alloc_always</code>.</p>
 		</div>
@@ -49,5 +49,3 @@ const user = managed_user.value;
 <p>Parsing JSON and creating <code>T</code> likely requires memory allocations. These allocations are done within an <code>std.heap.ArenaAllocator</code>. Thus, the parsed <code>value: T</code> has a lifetime tied to the arena. When <code>zul.Manage(T).deinit()</code> is called, the arena is cleared and freed.</p>
 
 <p><code>zul.Manage</code> is a renamed <code>std.json.Parsed(T)</code> (I dislike the name <code>std.json.Parsed(T)</code> because it represents data and behavior that has nothing to with with JSON or parsing).</p>
-
-<p>I wrote a blob post, <a href="https://www.openmymind.net/Zigs-std-json-Parsed/">Zig's std.json.Parsed(T)</a>, explaining this pattern.</p>

@@ -51,7 +51,7 @@ pub const expectApproxEqRel = std.testing.expectApproxEqRel;
 <h3 id=module_vars><a href=#module_vars aria-hidden=true>Variables</a></h3>
 <div>
 	<div class=member>
-		<code class=sig>arena: std.heap.ArenaAllocator</code>
+		<code class=name>arena: std.heap.ArenaAllocator</code>
 		<div class=desc>
 			<p>Complex tests often require their own allocation. This test-only data is particularly well suited for an ArenaAllocator.</p>
 
@@ -84,13 +84,13 @@ test "readLines" {
 <h2 id=module_functions><a href=#module_functions aria-hidden=true>Functions</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=expectEqual><a href=#expectEqual aria-hidden=true>expectEqual(expected anytype, actual anytype) !void</a></code>
+		<code class=name id=expectEqual><a href=#expectEqual aria-hidden=true>expectEqual(expected anytype, actual anytype) !void</a></code>
 		<div class=desc>
 			<p>Similar to <code>std.testing.expectEqual</code>, but will coerce <code>expected</code> to <code>actual</code> and can be used to compare strings.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=reset><a href=#reset aria-hidden=true>reset()</a></code>
+		<code class=name id=reset><a href=#reset aria-hidden=true>reset()</a></code>
 		<div class=desc>
 			<p>Resets the <code>zul.testing.arena</code>. Typically called in a <code>defer</code> atop the test when the <code>zul.testing.arena</code> is used.</p>
 		</div>
@@ -122,25 +122,31 @@ test "random example" {
 <p>Helpers to generate random data.</p>
 <div>
 	<div class=member>
-		<code class=sig id=Random.bytes><a href=#Random.bytes aria-hidden=true>bytes(min: usize, max: usize) []u8</a></code>
+		<code class=name id=Random.bytes><a href=#Random.bytes aria-hidden=true>bytes(min: usize, max: usize) []u8</a></code>
 		<div class=desc>
 			<p>Populates a <code>[]u8</code> with random bytes. The created <code>[]u8</code> will be between <code>min</code> and <code>max</code> bytes in length (inclusive). It is created using the <code>zul.testing.arena</code> so <code><a href=#reset>reset</a></code> should be called.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Random.fillAtLeast><a href=#Random.fillAtLeast aria-hidden=true>fillAtLeast(buf: []u8, min: usize) []u8</a></code>
+		<code class=name id=Random.fill><a href=#Random.fill aria-hidden=true>fill(buf: []u8) void</a></code>
 		<div class=desc>
-			<p>Fill <code>buf</code> with random bytes. Returns a slice that is between <code>min</code> and <code>buf.len</code> bytes in length (inclusive). Because this only fills <code>buf</code> and doesn't allocate, in a tight loop, it can be much faster than <code><a href=#Random.bytes>bytes</a></code>, but calling <code>fillAtLeast</code> again with the same buffer will overrite any previously returned slice.</p>
+			<p>Fill <code>buf</code> with random bytes. Because this only fills <code>buf</code>, overwriting any previous data, and doesn't allocate, in a tight loop, it can be much faster than <code><a href=#Random.bytes>bytes</a></code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Random.intRange><a href=#Random.intRange aria-hidden=true>intRange(comptime T: type, min: T, max: T) T</a></code>
+		<code class=name id=Random.fillAtLeast><a href=#Random.fillAtLeast aria-hidden=true>fillAtLeast(buf: []u8, min: usize) []u8</a></code>
+		<div class=desc>
+			<p>Fill <code>buf</code> with random bytes. Returns a slice that is between <code>min</code> and <code>buf.len</code> bytes in length (inclusive). Because this only fills <code>buf</code>, overwriting any previous data, and doesn't allocate, in a tight loop, it can be much faster than <code><a href=#Random.bytes>bytes</a></code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Random.intRange><a href=#Random.intRange aria-hidden=true>intRange(comptime T: type, min: T, max: T) T</a></code>
 		<div class=desc>
 			<p>Returns an integer of type <code>T</code> that is between <code>min</code> and <code>max</code> inclusive. This is a wrapper around <code>std.rand.Random.intRangeAtMost</code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Random.random><a href=#Random.random aria-hidden=true>random() std.rand.Random</a></code>
+		<code class=name id=Random.random><a href=#Random.random aria-hidden=true>random() std.rand.Random</a></code>
 		<div class=desc>
 			<p>Returns a randomly seeded <code>std.rand.Random</code> instance.</p>
 		</div>

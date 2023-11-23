@@ -101,6 +101,43 @@ while (try it.next()) |line| {
 }
 ```
 
+## [zul.http.Client](https://www.goblgobl.com/zul/http/client/)
+A wrapper around std.http.Client to make it easier to create requests and consume responses.
+
+```zig
+// The client is thread-safe
+var client = zul.http.Client.init(allocator);
+defer client.deinit();
+
+// Not thread safe, method defaults to .GET
+var req = try client.request("https://api.github.com/search/topics");
+defer req.deinit();
+
+// Set the querystring, can also be set in the URL passed to client.request
+// or a mix of setting in client.request and programmatically via req.query
+try req.query("q", "zig");
+
+try req.header("Authorization", "Your Token");
+
+// The lifetime of res is tied to req
+var res = try req.getResponse(.{});
+if (res.status != 200) {
+	// TODO: handle error
+	return;
+}
+
+// On success, this is a zul.Managed(SearchResult), its lifetime is detached
+// from the req, allowing it to outlive req.
+const managed = try res.json(SearchResult, allocator, .{});
+
+// Parsing the JSON and creating SearchResult [probably] required some allocations.
+// Internally an arena was created to manage this from the allocator passed to
+// res.json.
+defer managed.deinit();
+
+const search_result = managed.value;
+```
+
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)
 Efficiently create dynamic strings or binary data.
 

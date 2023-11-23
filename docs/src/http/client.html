@@ -1,0 +1,242 @@
+---
+layout: site.njk
+title: zul.http.Client
+---
+
+<h1 id=zul.http.Client><a href=#zul.http.Client aria-hidden=true>zul.http.Client</a></h1>
+<p>A wrapper around <code>std.http.Client</code> to make it easier to create requests and consume responses.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// The client is thread-safe
+var client = zul.http.Client.init(allocator);
+defer client.deinit();
+
+// Not thread safe, method defaults to .GET
+var req = try client.request("https://api.github.com/search/topics");
+defer req.deinit();
+
+// Set the querystring, can also be set in the URL passed to client.request
+// or a mix of setting in client.request and programmatically via req.query
+try req.query("q", "zig");
+
+try req.header("Authorization", "Your Token");
+
+// The lifetime of res is tied to req
+var res = try req.getResponse(.{});
+if (res.status != 200) {
+	// TODO: handle error
+	return;
+}
+
+// On success, this is a zul.Managed(SearchResult), its lifetime is detached
+// from the req, allowing it to outlive req.
+const managed = try res.json(SearchResult, allocator, .{});
+
+// Parsing the JSON and creating SearchResult [probably] required some allocations.
+// Internally an arena was created to manage this from the allocator passed to
+// res.json.
+defer managed.deinit();
+
+const search_result = managed.value;
+{% endhighlight %}
+
+<h2 id=Client><a href=#Client aria-hidden=true>Client struct</a></h2>
+<p><code>zul.http.Client</code> is wrapper around <code>std.http.Client</code>. Is is thread-safe and its only purpose is to create <code><a href=#Request>zul.http.Request</a></code> objects.</p>
+
+<h3 id=Client.fields><a href=#Client.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>client: std.http.Client</code>
+		<div class=desc>
+			<p>Should only be used if tweaks to the underlying <code>std.http.Client</code> are needed.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=Client.methods><a href=#Client.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Client.init><a href=#Client.init aria-hidden=true>init(allocator: Allocator) Client</a></code>
+		<div class=desc>
+			<p>Creates a <code>Client</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Client.deinit><a href=#Client.deinit aria-hidden=true>deinit(self: *Client) void</a></code>
+		<div class=desc>
+			<p>Releases all memory associated with the client. The <code>client</code> should not be used after this is called.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Client.request><a href=#Client.request aria-hidden=true>request(self: *Client, url: []const u8) !Request</a></code>
+		<div class=desc>
+			<p>Creates a <code><a href=#Request>Request</a></code> object, using the provided <code>url</code>. The <code>Request</code> will use the <code>Allocator</code> use the <code>Client</code>'s allocator.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Client.allocRequest><a href=#Client.allocRequest aria-hidden=true>fn allocRequest(...) !Request</a></code>
+{% highlight zig %}
+fn allocRequest(
+  self: *Client,
+
+  // With the plain request() method, the client's allocator is used. A different
+  // allocator can be used with this variant.
+  allocator: Allocator,
+
+  url: []const u8,
+
+) !Request
+{% endhighlight %}
+		<div class=desc>
+			<p>Creates a <code><a href=#Request>Request</a></code> object, using the provided <code>url</code>. The <code>Request</code> will use the provided <code>Allocator</code>.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Request><a href=#Request aria-hidden=true>Request struct</a></h2>
+<p><code>zul.http.Request</code> is used to build the request (querystring, headers, body) and issue the request  to get a <code><a href=#Response>Response</a></code>. A <code>Request</code> is not thread-safe. To get a request, use the <code><a href="#Client.request">client.request</a></code> method.</p>
+
+<h3 id=Request.fields><a href=#Request.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>headers: std.http.Headers</code>
+		<div class=desc>
+			<p>Gives direct access to the request headers. To add headers, prefer using the <code><a href=#Request.header>header</a></code> method.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>method: std.http.Method</code>
+		<div class=desc>
+			<p>Defaults to <code>.GET</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>url: <a href="{{env.baseURL}}/string_builder/#zul.StringBuilder">zul.StringBuilder</a></code>
+		<div class=desc>
+			<p>Gives direct access to the URL. For manipulating the querystring, prefer using the <code><a href=#Request.query>query</a></code> method.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=Request.methods><a href=#Request.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Request.deinit><a href=#Request.deinit aria-hidden=true>fn deinit(self: *Request) void</a></code>
+		<div class=desc>
+			<p>Releases all memory associated with the request <strong>as well as any generated response</strong>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Request.body><a href=#Request.body aria-hidden=true>body(self: *Request, str: []const u8) void</a></code>
+		<div class=desc>
+			<p>Sets the request body to the given value.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Request.header><a href=#Request.header aria-hidden=true>header(self: *Request, name: []const u8, value: []const u8) !void</a></code>
+		<div class=desc>
+			<p>Adds the given name-value pair to the request headers.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Request.query><a href=#Request.query aria-hidden=true>query(self: *Request, name: []const u8, value: []const u8) !void</a></code>
+		<div class=desc>
+			<p>Appends the given name-value pair to the request's querystring. Both the name and value will be automatically encoded if needed. The querystring can also be set when first creating the request as part of the specified URL. It is allowed to set some querystring values via the original URLs and others via this method.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Request.streamFile><a href=#Request.streamFile aria-hidden=true>streamFile(self: *Request, file_path: []const u8) void</a></code>
+		<div class=desc>
+			<p>Will send the contents of the file as the body of the request. <code>file_path</code> can be absolute or relative.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Request.getResponse><a href=#Request.getResponse aria-hidden=true>getResponse(self: *Request, opts: Request.Opts) !Response</a></code>
+		<div class=desc>
+			<p>Issues the requests and, on success, returns the <code><a href="#Response">Response</a></code>. <code>opts</code> is current not used.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Response><a href=#Response aria-hidden=true>Response struct</a></h2>
+<p><code>zul.http.Response</code> lifetime is tied to the initiating request. Therefore, it has no <code>deinit</code> method. When <code><a href="#Request.deinit">request.deinit</a></code> is called, the response is no longer valid. Note however that the methods for reading the body detach the body from this lifetime.</p>
+
+<h3 id=Request.fields><a href=#Request.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>req: *std.http.Client.Request</code>
+		<div class=desc>
+			<p>The underlying request.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>res: *std.http.Client.Response</code>
+		<div class=desc>
+			<p>The underlying response.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>status: u16</code>
+		<div class=desc>
+			<p>The response's HTTP status code.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=Response.methods><a href=#Response.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Response.header><a href=#Response.header aria-hidden=true>fn header(self: *Response, name: []const u8) ?[]const u8</a></code>
+		<div class=desc>
+			<p>Returns the value associated with the given header <code>name</code>, if any. The name is case-insensitive.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Response.json><a href=#Response.json aria-hidden=true>fn json(...) !zul.Managed(T)</a></code>
+{% highlight zig %}
+fn json(
+	self: Response,
+
+	// The type to parse into
+	comptime T: type,
+
+	// An arena allocator will be created from this allocator for any memory needed
+	// to parse the JSON and create T
+	allocator: std.mem.Allocator,
+
+	// Consider setting ignore_unknown_fields = true
+	// and the max_value_len
+	opts: std.json.ParseOptions
+
+) !zul.Managed(T)
+{% endhighlight %}
+		<div class=desc>
+			<p>Attempts to parse the body as JSON. On success, the returned object has its own lifetime, independent of the initiating request or response.</p>
+
+			<p><code>zul.Manage</code> is a renamed <code>std.json.Parsed(T)</code> (I dislike the name <code>std.json.Parsed(T)</code> because it represents data and behavior that has nothing to with with JSON or parsing).</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Response.allocBody><a href=#Response.allocBody aria-hidden=true>fn allocBody(...) !zul.StringBuilder</a></code>
+{% highlight zig %}
+fn allocBody (
+  self: *Response,
+
+  // Allocator will be used to create the []const u8 that will hold the body
+  // If the response has a content-length, then exactly $content_length bytes will
+  // be allocated
+  allocator: std.mem.Allocator,
+
+  // {.max_size = usize, .buffer_size: usize}
+  opts: zul.StringBuilder.FromReaderOpts,
+
+) !zul.StringBuilder
+{% endhighlight %}
+		<div class=desc>
+			<p>Reads the body into a <code>zul.StringBuilder</code>. Consider setting the <code>max_size</code> field of <code>opts</code> to a reasonable value.</p>
+
+			<p>This method returns a <code>zul.StringBuilder</code> to support chunked-encoding responses where the length isn't known ahead of time and a growable buffer is needed. In such cases, a correctly sized <code>[]const u8</code> cannot be returned without doing an additional copy. <code>zul.StringBuilder</code> is preferred over <code>std.ArrayList(u8)</code> because of its more efficient ability to read from a <code>std.io.Reader</code>.</p>
+		</div>
+	</div>
+<div>

@@ -3,6 +3,13 @@ const builtin = @import("builtin");
 
 const BORDER = "=" ** 80;
 
+// Our zul.http.Client tests don't use TLS..and just _compiling_ TLS adds overhead
+// so during our tests, we disable it.
+// See: https://github.com/ziglang/zig/issues/17051
+pub const std_options = struct{
+	pub const http_disable_tls = true;
+};
+
 pub fn main() !void {
 	const verbose = blk: {
 		if (std.os.getenv("TEST_VERBOSE")) |e| {

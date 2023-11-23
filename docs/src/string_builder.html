@@ -38,7 +38,7 @@ std.debug.print("{any}\n", .{sb.string()});
 <h3 id=StringBuilder.fields><a href=#StringBuilder.fields aria-hidden=true>Fields</a></h3>
 <div>
 	<div class=member>
-		<code class=sig>endian: std.builtin.Endian</code>
+		<code class=name>endian: std.builtin.Endian</code>
 		<div class=desc>
 			<p>The endianness to use, <code>.big</code> or <code>.little</code>, when encoding integers. Defaults to the current architecture.</p>
 		</div>
@@ -48,93 +48,137 @@ std.debug.print("{any}\n", .{sb.string()});
 <h3 id=StringBuilder.methods><a href=#StringBuilder.methods aria-hidden=true>Methods</a></h3>
 <div>
 	<div class=member>
-		<code class=sig id=StringBuilder.init><a href=#StringBuilder.init aria-hidden=true>init(allocator: Allocator) StringBuilder</a></code>
+		<code class=name id=StringBuilder.init><a href=#StringBuilder.init aria-hidden=true>init(allocator: Allocator) StringBuilder</a></code>
 		<div class=desc>
 			<p>Creates a <code>StringBuilder</code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.deinint><a href=#StringBuilder.deinint aria-hidden=true>deinint(self: StringBuilder) StringBuilder</a></code>
+		<code class=name id=StringBuilder.deinit><a href=#StringBuilder.deinit aria-hidden=true>deinit(self: StringBuilder) StringBuilder</a></code>
 		<div class=desc>
 			<p>Releases all allocated memory. The <code>StringBuilder</code> should not be used after this is called.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.clearRetainingCapacity><a href=#StringBuilder.clearRetainingCapacity aria-hidden=true>clearRetainingCapacity(self: StringBuilder) void</a></code>
+		<code class=name id=StringBuilder.clearRetainingCapacity><a href=#StringBuilder.clearRetainingCapacity aria-hidden=true>clearRetainingCapacity(self: StringBuilder) void</a></code>
 		<div class=desc>
 			<p>Resets the <code>StringBuilder</code>'s length to 0 without freeing the underlying buffer. It is safe to re-use the <code>StringBuilder</code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.copy><a href=#StringBuilder.copy aria-hidden=true>copy(sb: StringBuilder, allocator: Allocator) ![]u8</a></code>
+		<code class=name id=StringBuilder.copy><a href=#StringBuilder.copy aria-hidden=true>copy(sb: StringBuilder, allocator: Allocator) ![]u8</a></code>
 		<div class=desc>
 			<p>Creates a copy of the written data using the provided <code>allocator</code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.ensureUnusedCapacity><a href=#StringBuilder.ensureUnusedCapacity aria-hidden=true>ensureUnusedCapacity(sb: *StringBuilder, n: usize) !void</a></code>
+		<code class=name id=StringBuilder.ensureUnusedCapacity><a href=#StringBuilder.ensureUnusedCapacity aria-hidden=true>ensureUnusedCapacity(sb: *StringBuilder, n: usize) !void</a></code>
 		<div class=desc>
 			<p>Ensures that the the underlying buffer has <code>n</code> spare bytes. If not, tries to allocates enough memory to allocate <code>n</code> additional bytes.</p>
 			<p>This can be used to pre-grow the buffer prior to making a large number of writes.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.len><a href=#StringBuilder.len aria-hidden=true>len(sb: StringBuilder) usize</a></code>
+		<code class=name id=StringBuilder.fromOwnedSlice><a href=#StringBuilder.fromOwnedSlice aria-hidden=true>fromOwnedSlice(...) StringBuilder</a></code>
+{% highlight zig %}
+fn fromOwnedSlice(
+	// When deinit is called on the returned StringBuilder, buf will be freed
+	// with tthis allocator. Thus, buf must have been created with this
+	// allocator.
+	allocator: std.mem.Allocator,
+
+	// The position of the returned StringBuilder will be set to buf.len (thus
+	// any subsequent writes will be appended)
+	buf: []u8,
+
+) StringBuilder
+{% endhighlight %}
+
+		<div class=desc>
+			<p>Creates a StringBuilder around the provided <code>buf</code>. <code>buf</code> must have been created by the provided <code>allocator</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=StringBuilder.fromReader><a href=#StringBuilder.fromReader aria-hidden=true>fromReader(...) !StringBuilder</a></code>
+{% highlight zig %}
+fn fromReader(
+	allocator: std.mem.Allocator,
+
+	// Typically an std.io.Reader, but can be any type that has a read([]u8) !size method
+	reader: anytype,
+
+	// {.max_size = usize, .buffer_size = usize}
+	opts: FromReaderOpts
+
+) !StringBuilder
+{% endhighlight %}
+		<div class=desc>
+			<p>Creates and populates a <code>StringBuilder</code> by reading from the <code>reader</code>.</p>
+
+			<p>Options:</p>
+			<ul>
+				<li><code>max_size: usize</code> - Will return an <code>error.TooBig</code> if more than the specified value is read. Default: <code>std.math.maxInt(usize)</code>.
+				<li><code>buffer_size: usize</code> - For the sake of efficiency, the reader is read directly into the StringBuilder's underlying buffer (there is no intermediate buffer). `buffer_size` controls the (a) initial size and (b) growth of the underlying buffer. Defaults to `8192`. Is forced to <code>64</code> when the value is less than <code>64</code>
+			</ul>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=StringBuilder.len><a href=#StringBuilder.len aria-hidden=true>len(sb: StringBuilder) usize</a></code>
 		<div class=desc>
 			<p>Returns the length of the written data.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.skip><a href=#StringBuilder.skip aria-hidden=true>skip(sb: *StringBuilder, count: usize) !View</a></code>
+		<code class=name id=StringBuilder.skip><a href=#StringBuilder.skip aria-hidden=true>skip(sb: *StringBuilder, count: usize) !View</a></code>
 		<div class=desc>
 			<p>Skips the specified number of bytes and returns a <code><a href="#View">View</a></code> that can be used to backfill the skipped data.</p>
 			<p><code>count</code> can be larger than the existing buffer length, in which case <code>skip</code> will attempt to grow the buffer.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.string><a href=#StringBuilder.string aria-hidden=true>string(sb: StringBuilder) []u8</a></code>
+		<code class=name id=StringBuilder.string><a href=#StringBuilder.string aria-hidden=true>string(sb: StringBuilder) []u8</a></code>
 		<div class=desc>
 			<p>Returns the bytes written. Subsequent modifications to the <code>StringBuilder</code> may invalidate the returned data</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.truncate><a href=#StringBuilder.truncate aria-hidden=true>truncate(sb: *StringBuilder, n: usize) void</a></code>
+		<code class=name id=StringBuilder.truncate><a href=#StringBuilder.truncate aria-hidden=true>truncate(sb: *StringBuilder, n: usize) void</a></code>
 		<div class=desc>
 			<p>Truncates the data by <code>n</code> bytes. If <code>n</code> is greater than the length of the buffer, the length is set to 0. Does not free memory.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.write><a href=#StringBuilder.write aria-hidden=true>write(sb: *StringBuilder, data: []u8) !void</a></code>
+		<code class=name id=StringBuilder.write><a href=#StringBuilder.write aria-hidden=true>write(sb: *StringBuilder, data: []u8) !void</a></code>
 		<div class=desc>
 			<p>Appends <code>data</code>, growing the underlying buffer if needed</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeAssumeCapacity><a href=#StringBuilder.writeAssumeCapacity aria-hidden=true>writeAssumeCapacity(sb: *StringBuilder, data: []u8) void</a></code>
+		<code class=name id=StringBuilder.writeAssumeCapacity><a href=#StringBuilder.writeAssumeCapacity aria-hidden=true>writeAssumeCapacity(sb: *StringBuilder, data: []u8) void</a></code>
 		<div class=desc>
 			<p>Appends <code>data</code> assuming that the underlying buffer has enough free space. This method is slightly faster than <code>write</code> but is unsafe and should only be used in conjunction with <code><a href="#StringBuilder.ensureUnusedCapacity">ensureUnusedCapacity</a></code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeByte><a href=#StringBuilder.writeByte aria-hidden=true>writeByte(sb: *StringBuilder, b: u8) !void</a></code>
+		<code class=name id=StringBuilder.writeByte><a href=#StringBuilder.writeByte aria-hidden=true>writeByte(sb: *StringBuilder, b: u8) !void</a></code>
 		<div class=desc>
 			<p>Appends the byte, growing the underlying buffer if needed</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeByteAssumeCapacity><a href=#StringBuilder.writeByteAssumeCapacity aria-hidden=true>writeByteAssumeCapacity(sb: *StringBuilder, b: u8) void</a></code>
+		<code class=name id=StringBuilder.writeByteAssumeCapacity><a href=#StringBuilder.writeByteAssumeCapacity aria-hidden=true>writeByteAssumeCapacity(sb: *StringBuilder, b: u8) void</a></code>
 		<div class=desc>
 			<p>Appends the byte assuming that the underlying buffer has enough free space. This method is slightly faster than <code>writeByte</code> but is unsafe and should only be used in conjunction with <code><a href="#StringBuilder.ensureUnusedCapacity">ensureUnusedCapacity</a></code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeByteNTimes><a href=#StringBuilder.writeByteNTimes aria-hidden=true>writeByteNTimes(sb: *StringBuilder, b: u8, n: usize) !void</a></code>
+		<code class=name id=StringBuilder.writeByteNTimes><a href=#StringBuilder.writeByteNTimes aria-hidden=true>writeByteNTimes(sb: *StringBuilder, b: u8, n: usize) !void</a></code>
 		<div class=desc>
 			<p>Appends the byte <code>n</code> times, growing the underlying buffer if needed.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writer><a href=#StringBuilder.writer aria-hidden=true>writer(sb: *StringBuilder) std.io.Writer</a></code>
+		<code class=name id=StringBuilder.writer><a href=#StringBuilder.writer aria-hidden=true>writer(sb: *StringBuilder) std.io.Writer</a></code>
 		<div class=desc>
 			<p>Returns an <code>std.io.Writer</code>. This allows the <code>StringBuilder</code> to receive writes from a number of <code>std</code> and third party libraries, such as <code>std.json.stringify</code>.</p>
 		</div>
@@ -146,56 +190,56 @@ std.debug.print("{any}\n", .{sb.string()});
 
 <div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeU16><a href=#StringBuilder.writeU16 aria-hidden=true>writeU16(sb: *StringBuilder, value u16) !void</a></code>
+		<code class=name id=StringBuilder.writeU16><a href=#StringBuilder.writeU16 aria-hidden=true>writeU16(sb: *StringBuilder, value u16) !void</a></code>
 		<div class=desc>
 			<p>Writes an unsigned integer using the encoding defined by <code>sb.endian</code>.</p>
 			<p>Variants: <code>writeU32</code> and <code>writeU64</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeI16><a href=#StringBuilder.writeI16 aria-hidden=true>writeI16(sb: *StringBuilder, value i16) !void</a></code>
+		<code class=name id=StringBuilder.writeI16><a href=#StringBuilder.writeI16 aria-hidden=true>writeI16(sb: *StringBuilder, value i16) !void</a></code>
 		<div class=desc>
 			<p>Writes an signed integer using the encoding defined by <code>sb.endian</code>.</p>
 			<p>Variants: <code>writeI32</code> and <code>writeI64</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeU16Little><a href=#StringBuilder.writeU16Little aria-hidden=true>writeU16Little(sb: *StringBuilder, value u16) !void</a></code>
+		<code class=name id=StringBuilder.writeU16Little><a href=#StringBuilder.writeU16Little aria-hidden=true>writeU16Little(sb: *StringBuilder, value u16) !void</a></code>
 		<div class=desc>
 			<p>Writes an unsigned integer using little endian encoding.</p>
 			<p>Variants: <code>writeU32Little</code> and <code>writeU64Little</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeI16Little><a href=#StringBuilder.writeI16Little aria-hidden=true>writeI16Little(sb: *StringBuilder, value u16) !void</a></code>
+		<code class=name id=StringBuilder.writeI16Little><a href=#StringBuilder.writeI16Little aria-hidden=true>writeI16Little(sb: *StringBuilder, value u16) !void</a></code>
 		<div class=desc>
 			<p>Writes an signed integer using little endian encoding.</p>
 			<p>Variants: <code>writeI32Little</code> and <code>writeI64Little</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeU16Big><a href=#StringBuilder.writeU16Big aria-hidden=true>writeU16Big(sb: *StringBuilder, value u16) !void</a></code>
+		<code class=name id=StringBuilder.writeU16Big><a href=#StringBuilder.writeU16Big aria-hidden=true>writeU16Big(sb: *StringBuilder, value u16) !void</a></code>
 		<div class=desc>
 			<p>Writes an unsigned integer using big endian encoding.</p>
 			<p>Variants: <code>writeU32Big</code> and <code>writeU64Big</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeI16Big><a href=#StringBuilder.writeI16Big aria-hidden=true>writeI16Big(sb: *StringBuilder, value u16) !void</a></code>
+		<code class=name id=StringBuilder.writeI16Big><a href=#StringBuilder.writeI16Big aria-hidden=true>writeI16Big(sb: *StringBuilder, value u16) !void</a></code>
 		<div class=desc>
 			<p>Writes an signed integer using big endian encoding.</p>
 			<p>Variants: <code>writeI32Big</code> and <code>writeI64Big</code></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeInt><a href=#StringBuilder.writeInt aria-hidden=true>writeInt(sb: *StringBuilder, value anytype) !void</a></code>
+		<code class=name id=StringBuilder.writeInt><a href=#StringBuilder.writeInt aria-hidden=true>writeInt(sb: *StringBuilder, value anytype) !void</a></code>
 		<div class=desc>
 			<p>Writes an integer using the encoding defined by <code>sb.endian</code>. Type type of <code>value</code> determines how the value is encoded.</p>
 			<p>It is a compile-time error to pass a <code>comptime_int</code>. You must cast the constant.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=StringBuilder.writeIntAs><a href=#StringBuilder.writeIntAs aria-hidden=true>writeIntAs(sb: *StringBuilder, value anytype, endian: Endian) !void</a></code>
+		<code class=name id=StringBuilder.writeIntAs><a href=#StringBuilder.writeIntAs aria-hidden=true>writeIntAs(sb: *StringBuilder, value anytype, endian: Endian) !void</a></code>
 		<div class=desc>
 			<p>Writes an integer using the specified endianness. Type type of <code>value</code> determines how the value is encoded.</p>
 			<p>It is a compile-time error to pass a <code>comptime_int</code>. You must cast the constant.</p>

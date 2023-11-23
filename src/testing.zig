@@ -46,6 +46,11 @@ pub const Random = struct {
 		return buf;
 	}
 
+	pub fn fill(buf: []u8) void {
+		var r = random();
+		r.bytes(buf);
+	}
+
 	pub fn fillAtLeast(buf: []u8, min: usize) []u8 {
 		var r = random();
 		const l = r.intRangeAtMost(usize, min, buf.len);

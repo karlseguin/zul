@@ -33,7 +33,7 @@ for (sorted_entries) |entry| {
 <h2 id=parameters><a href=#parameters aria-hidden=true>Parameters</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=v4>path: []const u8</code>
+		<code class=name id=v4>path: []const u8</code>
 		<div class=desc><p>Absolute or relative path to the directory.</p></div>
 	</div>
 </div>
@@ -44,13 +44,13 @@ for (sorted_entries) |entry| {
 <h3 id=Iterator.methods><a href=#Iterator.methods aria-hidden=true>Methods</a></h3>
 <div>
 	<div class=member>
-		<code class=sig id=Iterator.deinit><a href=#Iterator.deinit aria-hidden=true>deinit(self: Iterator) void</a></code>
+		<code class=name id=Iterator.deinit><a href=#Iterator.deinit aria-hidden=true>deinit(self: Iterator) void</a></code>
 		<div class=desc>
 			<p>Releases the underlying operating system resources. Frees memory allocated by <code><a href="#Iterator.all">all</a></code>.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Iterator.all><a href=#Iterator.all aria-hidden=true>all(self: *Iterator, allocator: Allocator, sort: Sort) ![]Entry</a></code>
+		<code class=name id=Iterator.all><a href=#Iterator.all aria-hidden=true>all(self: *Iterator, allocator: Allocator, sort: Sort) ![]Entry</a></code>
 		<div class=desc>
 			<p>Gets all remaining directory entries. <code>sort</code> can be one of four values:</p>
 			<ul>
@@ -64,7 +64,7 @@ for (sorted_entries) |entry| {
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Iterator.next><a href=#Iterator.next aria-hidden=true>next(self: *Iterator) !?Entry</a></code>
+		<code class=name id=Iterator.next><a href=#Iterator.next aria-hidden=true>next(self: *Iterator) !?Entry</a></code>
 		<div class=desc>
 			<p>Returns the next directory entry, or <code>null</code> if there are no more entries.</p>
 
@@ -74,7 +74,7 @@ for (sorted_entries) |entry| {
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=Iterator.reset><a href=#Iterator.reset aria-hidden=true>reset(self: *Iterator) void</a></code>
+		<code class=name id=Iterator.reset><a href=#Iterator.reset aria-hidden=true>reset(self: *Iterator) void</a></code>
 		<div class=desc>
 			<p>Resets the iterator. Once reset, the iterator can be iterated again from the start.</p>
 		</div>

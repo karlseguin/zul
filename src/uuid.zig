@@ -228,7 +228,6 @@ test "uuid: format" {
 
 test "uuid: eql" {
 	const uuid1 = v4();
-	std.debug.print("{any} {s}\n", .{uuid1.bin, uuid1.toHex(.lower)});
 	const uuid2 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
 	const uuid3 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
 	const uuid4 = try parse("5cc75a16-8592-4de3-8215-89824a9c62c0");

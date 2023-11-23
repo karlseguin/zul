@@ -25,17 +25,17 @@ try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
 <h2 id=functions><a href=#functions aria-hidden=true>Functions</a></h2>
 <div>
 	<div class=member>
-		<code class=sig id=v4><a href=#v4 aria-hidden=true>v4()</a> <a href=#UUID>UUID</a></code>
+		<code class=name id=v4><a href=#v4 aria-hidden=true>v4()</a> <a href=#UUID>UUID</a></code>
 		<div class=desc><p>Generate a version 4 (random) UUID.</p></div>
 	</div>
 	<div class=member>
-		<code class=sig id=random><a href=#random aria-hidden=true>random()</a> <a href=#UUID>UUID</a></code>
+		<code class=name id=random><a href=#random aria-hidden=true>random()</a> <a href=#UUID>UUID</a></code>
 		<div class=desc>
 			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>v4()</a> unless you have specific reasons not to.</div>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=random><a href=#random aria-hidden=true>parse(hex: []const u8)</a> !<a href=#UUID>UUID</a></code>
+		<code class=name id=random><a href=#random aria-hidden=true>parse(hex: []const u8)</a> !<a href=#UUID>UUID</a></code>
 		<div class=desc>
 			<p>Attempts to parse a hex-encoded UUID. Returns <code>error.InvalidUUID</code> is the UUID is not valid.</div>
 		</div>
@@ -48,7 +48,7 @@ try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
 <h3 id=UUID.fields><a href=#UUID.fields aria-hidden=true>Fields</a></h3>
 <div>
 	<div class=member>
-		<code class=sig>bin: [16]u8</code>
+		<code class=name>bin: [16]u8</code>
 		<div class=desc>
 			<p>The binary representation of the UUID.</p>
 		</div>
@@ -58,20 +58,20 @@ try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
 <h3 id=UUID.methods><a href=#UUID.methods aria-hidden=true>Methods</a></h3>
 <div>
 	<div class=member>
-		<code class=sig id=UUID.toHex><a href=#UUID.toHex aria-hidden=true>toHex(uuid: UUID, case: Case) [36]u8</a></code>
+		<code class=name id=UUID.toHex><a href=#UUID.toHex aria-hidden=true>toHex(uuid: UUID, case: Case) [36]u8</a></code>
 		<div class=desc>
 			<p>Hex-encodes the UUID. The <code>case</code> parameter must be <code>.lower</code> or <code>.upper</code> and controls whether lowercase or uppercase hexadecimal is used.</p>
 			<p><strong>This method should be preferred over the other <code>toHex*</code> variants.</strong></p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=UUID.toHexAlloc><a href=#UUID.toHexAlloc aria-hidden=true>toHexAlloc(uuid: UUID, allocator: Allocator, case: Case) ![]u8</a></code>
+		<code class=name id=UUID.toHexAlloc><a href=#UUID.toHexAlloc aria-hidden=true>toHexAlloc(uuid: UUID, allocator: Allocator, case: Case) ![]u8</a></code>
 		<div class=desc>
 			<p>Hex-encodes the UUID into a heap-allocated buffer. The caller must <code>free</code> the returned value when it is no longer in use.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=sig id=UUID.toHexBuf><a href=#UUID.toHexBuf aria-hidden=true>toHexBuf(uuid: UUID, buf: []u8, case: Case) []u8</a></code>
+		<code class=name id=UUID.toHexBuf><a href=#UUID.toHexBuf aria-hidden=true>toHexBuf(uuid: UUID, buf: []u8, case: Case) []u8</a></code>
 		<div class=desc>
 			<p>Hex-encodes the UUID into <code>buf</code>, which must have a length equal or greater than 36.</p>
 	</div>

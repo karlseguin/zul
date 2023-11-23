@@ -141,7 +141,7 @@ pub const View = struct {
 pub const StringBuilder = struct {
 	buf: []u8,
 	pos: usize,
-	endian: Endian,
+	endian: Endian = builtin.cpu.arch.endian(),
 	allocator: Allocator,
 
 	pub fn init(allocator: Allocator) StringBuilder {
@@ -149,8 +149,60 @@ pub const StringBuilder = struct {
 			.pos = 0,
 			.buf = &[_]u8{},
 			.allocator = allocator,
-			.endian = builtin.cpu.arch.endian(),
 		};
+	}
+
+	// buf must be created with allocator
+	pub fn fromOwnedSlice(allocator: Allocator, buf: []u8) StringBuilder {
+		return .{
+			.buf = buf,
+			.pos = buf.len,
+			.allocator = allocator,
+		};
+	}
+
+	pub const FromReaderOpts = struct {
+		max_size: usize = std.math.maxInt(usize),
+		buffer_size: usize = 8192,
+	};
+
+	pub fn fromReader(allocator: Allocator, reader: anytype, opts: FromReaderOpts) !StringBuilder {
+		const max_size = opts.max_size;
+		const buffer_size = if (opts.buffer_size < 64) 64 else opts.buffer_size;
+
+		var buf = try allocator.alloc(u8, buffer_size);
+		errdefer allocator.free(buf);
+
+		var pos: usize = 0;
+		while (true) {
+			var read_slice = buf[pos..];
+			if (read_slice.len < 512) {
+				const new_capacity = buf.len + buffer_size;
+				if (allocator.resize(buf, new_capacity)) {
+					buf = buf.ptr[0..new_capacity];
+				} else {
+					const new_buffer = try allocator.alloc(u8, new_capacity);
+					@memcpy(new_buffer[0..buf.len], buf);
+					allocator.free(buf);
+					buf = new_buffer;
+				}
+				read_slice = buf[pos..];
+			}
+
+			const n = try reader.read(read_slice);
+			if (n == 0) {
+				break;
+			}
+
+			pos += n;
+			if (pos > max_size) {
+				return error.TooBig;
+			}
+		}
+
+		var sb = fromOwnedSlice(allocator, buf);
+		sb.pos = pos;
+		return sb;
 	}
 
 	pub fn deinit(self: StringBuilder) void {
@@ -336,7 +388,6 @@ pub const StringBuilder = struct {
 		@compileError("Unsupported integer type: " ++ @typeName(T));
 	}
 
-
 	pub fn ensureUnusedCapacity(self: *StringBuilder, n: usize) !void {
 		return self.ensureTotalCapacity(self.pos + n);
 	}
@@ -408,6 +459,16 @@ inline fn writeIntInto(comptime T: type, buf: []u8, pos: usize, value: T, l: usi
 }
 
 const t = @import("zul.zig").testing;
+test "StringBuilder: doc example" {
+	var sb = StringBuilder.init(t.allocator);
+	defer sb.deinit();
+
+	var view = try sb.skip(4);
+	try sb.writeByte(10);
+	try sb.write("hello");
+	view.writeU32Big(@intCast(sb.len() - 4));
+	try t.expectEqual(&.{0, 0, 0, 6, 10, 'h', 'e', 'l', 'l', 'o'}, sb.string());
+}
 
 test "StringBuilder: growth" {
 	var sb = StringBuilder.init(t.allocator);
@@ -693,13 +754,52 @@ test "StringBuilder: skip" {
 	}
 }
 
-test "StringBuilder: doc example" {
-	var sb = StringBuilder.init(t.allocator);
-	defer sb.deinit();
+test "StringBuilder: fromOwnedSlice" {
+	const s = try t.allocator.alloc(u8, 5);
+	@memcpy(s, "hello");
 
-	var view = try sb.skip(4);
-	try sb.writeByte(10);
-	try sb.write("hello");
-	view.writeU32Big(@intCast(sb.len() - 4));
-	try t.expectEqual(&.{0, 0, 0, 6, 10, 'h', 'e', 'l', 'l', 'o'}, sb.string());
+	const sb = StringBuilder.fromOwnedSlice(t.allocator, s);
+	try t.expectEqual("hello", sb.string());
+	sb.deinit();
+}
+
+test "StringBuilder: fromReader" {
+	var buf: [5000]u8 = undefined;
+	t.Random.fill(&buf);
+
+	{
+		// input too large
+		var stream = std.io.fixedBufferStream(&buf);
+		try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, stream.reader(), .{
+			.max_size = 1,
+		}));
+	}
+
+	{
+		// input too large (just)
+		var stream = std.io.fixedBufferStream(&buf);
+		try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, stream.reader(), .{
+			.max_size = 4999,
+		}));
+	}
+
+	{
+		// test with larger buffer than input
+		var stream = std.io.fixedBufferStream(&buf);
+		const sb = try StringBuilder.fromReader(t.allocator, stream.reader(), .{
+			.buffer_size = 6000,
+		});
+		defer sb.deinit();
+		try t.expectEqual(&buf, sb.string());
+	}
+
+	// test with different buffer sizes
+	for (0..50) |_| {
+		var stream = std.io.fixedBufferStream(&buf);
+		const sb = try StringBuilder.fromReader(t.allocator, stream.reader(), .{
+			.buffer_size = t.Random.intRange(u16, 510, 5000),
+		});
+		defer sb.deinit();
+		try t.expectEqual(&buf, sb.string());
+	}
 }
