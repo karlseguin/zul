@@ -17,6 +17,27 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 	return std.testing.expectEqual(@as(@TypeOf(actual), expected), actual);
 }
 
+pub fn expectDelta(expected: anytype, actual: anytype, delta: anytype) !void {
+	var diff = expected - actual;
+	if (diff < 0) {
+		diff = -diff;
+	}
+	if (diff <= delta) {
+		return;
+	}
+
+	print("Expected {} to be within {} of {}. Actual diff: {}", .{expected, delta, actual, diff});
+	return error.NotWithinDelta;
+}
+
+pub fn print(comptime fmt: []const u8, args: anytype) void {
+	if (@inComptime()) {
+		@compileError(std.fmt.comptimePrint(fmt, args));
+	} else {
+		std.debug.print(fmt, args);
+	}
+}
+
 // Re-expose these as-is so that more cases can rely on zul.testing exclusively.
 // Else, it's a pain to have both std.testing and zul.testing in a test.
 pub const expect = std.testing.expect;

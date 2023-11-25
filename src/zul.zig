@@ -8,6 +8,11 @@ pub const benchmark = @import("benchmark.zig");
 
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
 
+const datetime = @import("datetime.zig");
+
+pub const Date = datetime.Date;
+pub const Time = datetime.Time;
+
 pub fn Managed(comptime T: type) type {
 	return struct {
 		value: T,

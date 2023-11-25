@@ -84,6 +84,12 @@ test "readLines" {
 <h2 id=module_functions><a href=#module_functions aria-hidden=true>Functions</a></h2>
 <div>
 	<div class=member>
+		<code class=name id=expectDelta><a href=#expectDelta aria-hidden=true>expectDelta(expected anytype, actual anytype, delta: anytype) !void</a></code>
+		<div class=desc>
+			<p>Asserts that <code>expected</code> is within <code>delta</code> of <code>actual</code>. Unlike the <code>std.testing.expectApproxEq*</code> functions, <code>expectDelta</code> works with both integers and floats.</code>
+		</div>
+	</div>
+	<div class=member>
 		<code class=name id=expectEqual><a href=#expectEqual aria-hidden=true>expectEqual(expected anytype, actual anytype) !void</a></code>
 		<div class=desc>
 			<p>Similar to <code>std.testing.expectEqual</code>, but will coerce <code>expected</code> to <code>actual</code> and can be used to compare strings.</p>
