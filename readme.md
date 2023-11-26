@@ -3,9 +3,9 @@ The purpose of this library is to enhance Zig's standard library. Much of zul wr
 
 Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can be copy and pasted into an existing library or project.
 
-Full documentation is available at: [https://www.goblgobl.com/zul/](https://wwww.goblgobl.com/zul/).
+Full documentation is available at: [https://www.goblgobl.com/zul/](https://www.goblgobl.com/zul/).
 
-(This readme is auto-generated from [docs/src/readme.njk](https://github.com/karlseguin/zul/blob/master/docs/src/readme.njk)
+(This readme is auto-generated from [docs/src/readme.njk](https://github.com/karlseguin/zul/blob/master/docs/src/readme.njk))
 
 ## [zul.benchmark.run](https://www.goblgobl.com/zul/benchmark/)
 Simple benchmarking function.
