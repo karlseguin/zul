@@ -1,9 +1,11 @@
 # Zig Utility Library
 The purpose of this library is to enhance Zig's standard library. Much of zul wraps Zig's std to provide simpler APIs for common tasks (e.g. reading lines from a file). In other cases, new functionality has been added (e.g. a UUID type).
 
-Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can easily be copy and pasted into an existing library or project.
+Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can be copy and pasted into an existing library or project.
 
 Full documentation is available at: [https://www.goblgobl.com/zul/](https://wwww.goblgobl.com/zul/).
+
+(This readme is auto-generated from [docs/src/readme.njk](https://github.com/karlseguin/zul/blob/master/docs/src/readme.njk)
 
 ## [zul.benchmark.run](https://www.goblgobl.com/zul/benchmark/)
 Simple benchmarking function.
@@ -37,6 +39,19 @@ fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
 // lastIndexOfScalar
 //   20993066 iterations   142.15ns per iterations
 //   worst: 292ns  median: 125ns   stddev: 23.13ns
+```
+
+## [zul.DateTime](https://www.goblgobl.com/zul/datetime/)
+Simple (no leap seconds, UTC-only), DateTime, Date and Time types.
+
+```zig
+// Currently only supports RFC3339
+const dt = try zul.DateTime.parse("2028-11-05T23:29:10Z", .rfc3339);
+const next_week = try dt.add(7, .days);
+std.debug.assert(next_week.order(dt) == .gt);
+
+// 1857079750000 == 2028-11-05T23:29:10Z
+std.debug.print("{d} == {s}", .{dt.unix(.milliseconds), dt});
 ```
 
 ## [zul.fs.readDir](https://www.goblgobl.com/zul/fs/readdir/)

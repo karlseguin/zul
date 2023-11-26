@@ -92,6 +92,10 @@ pub const Time = struct {
 	sec: u8,
 	micros: u32,
 
+	pub const Format = enum {
+		rfc3339,
+	};
+
 	pub fn init(hour: u8, min: u8, sec: u8, micros: u32) !Time {
 		if (!Time.valid(hour, min, sec, micros)) {
 			return error.InvalidTime;
@@ -125,9 +129,12 @@ pub const Time = struct {
 		return true;
 	}
 
-	pub fn parse(input: []const u8) !Time {
+	pub fn parse(input: []const u8, fmt: Format) !Time {
 		var parser = Parser.init(input);
-		const time = try parser.time();
+		const time = switch (fmt) {
+			.rfc3339 => try parser.time(),
+		};
+
 		if (parser.unconsumed() != 0) {
 			return error.InvalidTime;
 		}
@@ -168,16 +175,26 @@ pub const Time = struct {
 pub const DateTime = struct {
 	micros: i64,
 
-	const microseconds_in_a_day = 86_400_000_000;
-	const microseconds_in_an_hour = 3_600_000_000;
-	const microseconds_in_a_min = 60_000_000;
-	const microseconds_in_a_sec = 1_000_000;
+	const MICROSECONDS_IN_A_DAY = 86_400_000_000;
+	const MICROSECONDS_IN_AN_HOUR = 3_600_000_000;
+	const MICROSECONDS_IN_A_MIN = 60_000_000;
+	const MICROSECONDS_IN_A_SEC = 1_000_000;
 
 	pub const Format = enum {
 		rfc3339,
 	};
 
 	pub const TimestampPrecision = enum {
+		seconds,
+		milliseconds,
+		microseconds,
+	};
+
+
+	pub const TimeUnit = enum {
+		days,
+		hours,
+		minutes,
 		seconds,
 		milliseconds,
 		microseconds,
@@ -201,8 +218,8 @@ pub const DateTime = struct {
 		const month_days = @divTrunc(((month_adj + adjust) * 62719 + 769), 2048);
 		const leap_days = @divTrunc(year_adj, 4) - @divTrunc(year_adj, 100) + @divTrunc(year_adj, 400);
 
-		const date_micros: i64 = (year_adj * 365 + leap_days + month_days + (day - 1) - 2472632) * microseconds_in_a_day;
-		const time_micros = (@as(i64, @intCast(hour)) * microseconds_in_an_hour) + (@as(i64, @intCast(min)) * microseconds_in_a_min) + (@as(i64, @intCast(sec)) * microseconds_in_a_sec) + micros;
+		const date_micros: i64 = (year_adj * 365 + leap_days + month_days + (day - 1) - 2472632) * MICROSECONDS_IN_A_DAY;
+		const time_micros = (@as(i64, @intCast(hour)) * MICROSECONDS_IN_AN_HOUR) + (@as(i64, @intCast(min)) * MICROSECONDS_IN_A_MIN) + (@as(i64, @intCast(sec)) * MICROSECONDS_IN_A_SEC) + micros;
 
 		return fromUnix(date_micros + time_micros, .microseconds);
 	}
@@ -280,6 +297,18 @@ pub const DateTime = struct {
 		return initUTC(dt.year, dt.month, dt.day, tm.hour, tm.min, tm.sec, tm.micros);
 	}
 
+	pub fn add(dt: DateTime, value: i64, unit: TimeUnit) !DateTime {
+		const micros = dt.micros;
+		switch (unit) {
+			.days =>  return fromUnix(micros + value * MICROSECONDS_IN_A_DAY, .microseconds),
+			.hours =>  return fromUnix(micros + value * MICROSECONDS_IN_AN_HOUR, .microseconds),
+			.minutes =>  return fromUnix(micros + value * MICROSECONDS_IN_A_MIN, .microseconds),
+			.seconds =>  return fromUnix(micros + value * MICROSECONDS_IN_A_SEC, .microseconds),
+			.milliseconds =>  return fromUnix(micros + value * 1_000, .microseconds),
+			.microseconds => return fromUnix(micros + value, .microseconds),
+		}
+	}
+
 	// https://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c?h=v0.9.15
 	pub fn date(dt: DateTime) Date {
 		// 2000-03-01 (mod 400 year, immediately after feb29
@@ -344,13 +373,22 @@ pub const DateTime = struct {
 	}
 
 	pub fn time(dt: DateTime) Time {
-		const micros = @mod(dt.micros, microseconds_in_a_day);
+		const micros = @mod(dt.micros, MICROSECONDS_IN_A_DAY);
 
 		return .{
-			.hour = @intCast(@divTrunc(micros, microseconds_in_an_hour)),
-			.min = @intCast(@divTrunc(@rem(micros, microseconds_in_an_hour), microseconds_in_a_min)),
-			.sec = @intCast(@divTrunc(@rem(micros, microseconds_in_a_min), microseconds_in_a_sec)),
-			.micros = @intCast(@rem(micros, microseconds_in_a_sec)),
+			.hour = @intCast(@divTrunc(micros, MICROSECONDS_IN_AN_HOUR)),
+			.min = @intCast(@divTrunc(@rem(micros, MICROSECONDS_IN_AN_HOUR), MICROSECONDS_IN_A_MIN)),
+			.sec = @intCast(@divTrunc(@rem(micros, MICROSECONDS_IN_A_MIN), MICROSECONDS_IN_A_SEC)),
+			.micros = @intCast(@rem(micros, MICROSECONDS_IN_A_SEC)),
+		};
+	}
+
+	pub fn unix(self: DateTime, precision: TimestampPrecision) i64 {
+		const micros = self.micros;
+		return switch (precision) {
+			.seconds => @divTrunc(micros, 1_000_000),
+			.milliseconds => @divTrunc(micros, 1_000),
+			.microseconds => micros,
 		};
 	}
 
@@ -370,15 +408,6 @@ pub const DateTime = struct {
 		const n = self.bufWrite(buf[1..]);
 		buf[n+1] = '"';
 		try out.print("{s}", .{buf[0..n+2]});
-	}
-
-	pub fn unix(self: DateTime, precision: TimestampPrecision) i64 {
-		const micros = self.micros;
-		return switch (precision) {
-			.seconds => @divTrunc(micros, 1_000_000),
-			.milliseconds => @divTrunc(micros, 1_000),
-			.microseconds => micros,
-		};
 	}
 
 	fn bufWrite(self: DateTime, buf: []u8) usize {
@@ -797,40 +826,40 @@ test "Time: format" {
 test "Time: parse" {
 	{
 		//valid
-		try t.expectEqual(Time{.hour = 9, .min = 8, .sec = 0, .micros = 0}, try Time.parse("09:08"));
-		try t.expectEqual(Time{.hour = 9, .min = 8, .sec = 5, .micros = 123000}, try Time.parse("09:08:05.123"));
-		try t.expectEqual(Time{.hour = 23, .min = 59, .sec = 59, .micros = 0}, try Time.parse("23:59:59"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 0}, try Time.parse("00:00:00"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 0}, try Time.parse("00:00:00.0"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 1}, try Time.parse("00:00:00.000001"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 12}, try Time.parse("00:00:00.000012"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123}, try Time.parse("00:00:00.000123"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 1234}, try Time.parse("00:00:00.001234"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 12345}, try Time.parse("00:00:00.012345"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.123456"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.1234567"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.12345678"));
-		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.123456789"));
+		try t.expectEqual(Time{.hour = 9, .min = 8, .sec = 0, .micros = 0}, try Time.parse("09:08", .rfc3339));
+		try t.expectEqual(Time{.hour = 9, .min = 8, .sec = 5, .micros = 123000}, try Time.parse("09:08:05.123", .rfc3339));
+		try t.expectEqual(Time{.hour = 23, .min = 59, .sec = 59, .micros = 0}, try Time.parse("23:59:59", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 0}, try Time.parse("00:00:00", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 0}, try Time.parse("00:00:00.0", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 1}, try Time.parse("00:00:00.000001", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 12}, try Time.parse("00:00:00.000012", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123}, try Time.parse("00:00:00.000123", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 1234}, try Time.parse("00:00:00.001234", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 12345}, try Time.parse("00:00:00.012345", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.123456", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.1234567", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.12345678", .rfc3339));
+		try t.expectEqual(Time{.hour = 0, .min = 0, .sec = 0, .micros = 123456}, try Time.parse("00:00:00.123456789", .rfc3339));
 	}
 
 	{
-		try t.expectError(error.InvalidTime, Time.parse(""));
-		try t.expectError(error.InvalidTime, Time.parse("01:00:"));
-		try t.expectError(error.InvalidTime, Time.parse("1:00:00"));
-		try t.expectError(error.InvalidTime, Time.parse("10:1:00"));
-		try t.expectError(error.InvalidTime, Time.parse("10:11:4"));
-		try t.expectError(error.InvalidTime, Time.parse("10:20:30."));
-		try t.expectError(error.InvalidTime, Time.parse("10:20:30.a"));
-		try t.expectError(error.InvalidTime, Time.parse("10:20:30.1234567899"));
-		try t.expectError(error.InvalidTime, Time.parse("10:20:30.123Z"));
-		try t.expectError(error.InvalidTime, Time.parse("24:00:00"));
-		try t.expectError(error.InvalidTime, Time.parse("00:60:00"));
-		try t.expectError(error.InvalidTime, Time.parse("00:00:60"));
-		try t.expectError(error.InvalidTime, Time.parse("0a:00:00"));
-		try t.expectError(error.InvalidTime, Time.parse("00:0a:00"));
-		try t.expectError(error.InvalidTime, Time.parse("00:00:0a"));
-		try t.expectError(error.InvalidTime, Time.parse("00/00:00"));
-		try t.expectError(error.InvalidTime, Time.parse("00:00 00"));
+		try t.expectError(error.InvalidTime, Time.parse("", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("01:00:", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("1:00:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:1:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:11:4", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:20:30.", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:20:30.a", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:20:30.1234567899", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("10:20:30.123Z", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("24:00:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00:60:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00:00:60", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("0a:00:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00:0a:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00:00:0a", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00/00:00", .rfc3339));
+		try t.expectError(error.InvalidTime, Time.parse("00:00 00", .rfc3339));
 
 	}
 }
@@ -1734,4 +1763,52 @@ test "DateTime: limits" {
 			}
 		}
 	}
+}
+
+test "DateTime: add" {
+	{
+		// positive
+		var dt = try DateTime.parse("2023-11-26T03:13:46.540234Z", .rfc3339);
+
+		dt = try dt.add(800, .microseconds);
+		try expectDateTime("2023-11-26T03:13:46.541034Z", dt);
+
+		dt = try dt.add(950, .milliseconds);
+		try expectDateTime("2023-11-26T03:13:47.491034Z", dt);
+
+		dt = try dt.add(32, .seconds);
+		try expectDateTime("2023-11-26T03:14:19.491034Z", dt);
+
+		dt = try dt.add(1489, .minutes);
+		try expectDateTime("2023-11-27T04:03:19.491034Z", dt);
+
+		dt = try dt.add(6, .days);
+		try expectDateTime("2023-12-03T04:03:19.491034Z", dt);
+	}
+
+	{
+		// negative
+		var dt = try DateTime.parse("2023-11-26T03:13:46.540234Z", .rfc3339);
+
+		dt = try dt.add(-800, .microseconds);
+		try expectDateTime("2023-11-26T03:13:46.539434Z", dt);
+
+		dt = try dt.add(-950, .milliseconds);
+		try expectDateTime("2023-11-26T03:13:45.589434Z", dt);
+
+		dt = try dt.add(-50, .seconds);
+		try expectDateTime("2023-11-26T03:12:55.589434Z", dt);
+
+		dt = try dt.add(-1489, .minutes);
+		try expectDateTime("2023-11-25T02:23:55.589434Z", dt);
+
+		dt = try dt.add(-6, .days);
+		try expectDateTime("2023-11-19T02:23:55.589434Z", dt);
+	}
+}
+
+fn expectDateTime(expected: []const u8, dt: DateTime) !void {
+	var buf: [30]u8 = undefined;
+	const actual = try std.fmt.bufPrint(&buf, "{s}", .{dt});
+	try t.expectEqual(expected, actual);
 }

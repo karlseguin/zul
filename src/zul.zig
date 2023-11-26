@@ -12,6 +12,7 @@ const datetime = @import("datetime.zig");
 
 pub const Date = datetime.Date;
 pub const Time = datetime.Time;
+pub const DateTime = datetime.DateTime;
 
 pub fn Managed(comptime T: type) type {
 	return struct {

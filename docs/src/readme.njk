@@ -7,9 +7,11 @@ permalinkBypassOutputDir: true
 # Zig Utility Library
 The purpose of this library is to enhance Zig's standard library. Much of zul wraps Zig's std to provide simpler APIs for common tasks (e.g. reading lines from a file). In other cases, new functionality has been added (e.g. a UUID type).
 
-Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can easily be copy and pasted into an existing library or project.
+Besides Zig's standard library, there are no dependencies. Most functionality is contained within its own file and can be copy and pasted into an existing library or project.
 
 Full documentation is available at: [https://www.goblgobl.com/zul/](https://wwww.goblgobl.com/zul/).
+
+(This readme is auto-generated from [docs/src/readme.njk](https://github.com/karlseguin/zul/blob/master/docs/src/readme.njk)
 
 {% for post in collections.sorted %}
 {%- set meta = postMeta(post) -%}

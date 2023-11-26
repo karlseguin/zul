@@ -1,0 +1,197 @@
+---
+layout: site.njk
+title: zul.DateTime
+---
+
+<h1 id=zul.DateTime><a href=#zul.DateTime aria-hidden=true>zul.DateTime</a></h1>
+<p>Simple (no leap seconds, UTC-only), DateTime, Date and Time types.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// Currently only supports RFC3339
+const dt = try zul.DateTime.parse("2028-11-05T23:29:10Z", .rfc3339);
+const next_week = try dt.add(7, .days);
+std.debug.assert(next_week.order(dt) == .gt);
+
+// 1857079750000 == 2028-11-05T23:29:10Z
+std.debug.print("{d} == {s}", .{dt.unix(.milliseconds), dt});
+{% endhighlight %}
+
+<h2 id=DateTime><a href=#DateTime aria-hidden=true>DateTime struct</a></h2>
+<p><code>zul.DateTime</code> is a very basic DateTime struct designed for the main purpose of allowing RFC3339 dates to be read and written. It is simply an <code>i64</code> representing the number of microseconds since unix epoch (Jan 1 1970). It supports valus ranging from Jan 1, -4712 to Dec 31, 9999. It does not support leap seconds and only supports UTC timezones.</p>
+
+<p>When serialized to JSON, or formatted using <code>std.fmt</code>, the RFC3339 representation is used.</p>
+
+<h3 id=DateTime.fields><a href=#DateTime.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>micros: i64</code>
+		<div class=desc>
+			<p>Microseconds since unix epoch. A negative value indicates a DateTime before Jan 1, 1970.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=DateTime.methods><a href=#DateTime.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=DateTime.initUTC><a href=#DateTime.initUTC aria-hidden=true>initUTC(...) !DateTime</a></code>
+{% highlight zig %}
+fn initUTC(
+	year: i16,
+	month: u8,
+	day: u8,
+	hour: u8,
+	min: u8,
+	sec: u8,
+	micros: u32
+) !DateTime
+{% endhighlight %}
+
+		<div class=desc>
+			<p>Creates a <code>DateTime</code>. This will fail if the date is outside of the supported range (i.e. <code>year</code> < -4712 or <code>year</code> 9999), or if the date is invalid (e.g. Nov 31).</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.fromUnix><a href=#DateTime.fromUnix aria-hidden=true>fromUnix(timestamp: i64, precision: TimestampPrecision) !DateTime</a></code>
+
+		<div class=desc>
+			<p>Creates a <code>DateTime</code>. <code>precision</code> can be one of: <code>.seconds</code>,
+		<code>.milliseconds</code> or <code>.microseconds</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.now><a href=#DateTime.now aria-hidden=true>now() DateTime</a></code>
+		<div class=desc>
+			<p>Creates a <code>DateTime</code> for the current date and time.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.parse><a href=#DateTime.parse aria-hidden=true>parse(str: []const u8, format: Format) !DateTime</a></code>
+		<div class=desc>
+			<p>Parses the string representation of a date + time. Currently, the only supported format is <code>.rfc3339</code>. Trying to parse a non-UTC date will result in an error.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.add><a href=#DateTime.add aria-hidden=true>add(dt: DateTime, value: i64, unit: TimeUnit) !DateTime</a></code>
+		<div class=desc>
+			<p>Creates a new <code>DateTime</code>. <code>unit</code> can be one of <code>.microseconds</code>, <code>.milliseconds</code>, <code>.seconds</code>, <code>.minutes</code>, <code>.hours</code> or <code>.days</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.date><a href=#DateTime.date aria-hidden=true>date(dt: DateTime) Date</a></code>
+		<div class=desc>
+			<p>Returns the <code><a href=#Date>Date</a></code> portion of the <code>DateTime</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.time><a href=#DateTime.time aria-hidden=true>time(dt: DateTime) Time</a></code>
+		<div class=desc>
+			<p>Returns the <code><a href=#Time>Time</a></code> portion of the <code>DateTime</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.order><a href=#DateTime.order aria-hidden=true>order(a: DateTime, precision: TimestampPrecision) i64</a></code>
+		<div class=desc>
+			<p>Returns number of <code>.seconds</code>, <code>.milliseconds</code> or <code>.microseconds</code> since unix epoch.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=DateTime.order><a href=#DateTime.order aria-hidden=true>order(a: DateTime, b: DateTime) std.math.Order</a></code>
+		<div class=desc>
+			<p>Compares two values.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Date><a href=#Date aria-hidden=true>Date struct</a></h2>
+<p><code>zul.Date</code> represents a year, month and day. It is serialized to JSON or using <code>std.fmt</code> using the <code>YYYY-MM-DD</code> format (i.e. ISO8601).</p>
+
+<h3 id=Date.fields><a href=#Date.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>year: i16</code>
+	</div>
+	<div class=member>
+		<code class=name>month: u8</code>
+		<div class=desc>1-based (i.e. Jan == 1)</div>
+	</div>
+	<div class=member>
+		<code class=name>day: u8</code>
+	</div>
+</div>
+
+<h3 id=Date.methods><a href=#Date.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Date.init><a href=#Date.init aria-hidden=true>init(year: i16, month: u8, day: u8) !Date</a></code>
+		<div class=desc>
+			<p>Creates a <code>Date</code>. This will fail if the date is invalid (e.g. Nov 31).</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Date.valid><a href=#Date.valid aria-hidden=true>valid(year: i16, month: u8, day: u8) bool</a></code>
+		<div class=desc>
+			<p>Returns <code>true</code> if the date is valid, <code>false</code> otherwise.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Date.parse><a href=#Date.parse aria-hidden=true>parse(str: []const u8, format: Format) !Date</a></code>
+		<div class=desc>
+			<p>Parses the string representation of a date. Currently, the only supported format is <code>.iso8601</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Date.order><a href=#Date.order aria-hidden=true>order(a: Date, b: Date) std.math.Order</a></code>
+		<div class=desc>
+			<p>Compares two values.</p>
+		</div>
+	</div>
+</div>
+
+<h2 id=Time><a href=#Time aria-hidden=true>Time struct</a></h2>
+<p><code>zul.Time</code> represents a hour, minute, second and microsecond. It is serialized to JSON or using <code>std.fmt</code> using the <code>HH:MM:SS[.000000]</code> format (i.e. RFC3339).</p>
+
+<h3 id=Time.fields><a href=#Time.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>hour: u8</code>
+	</div>
+	<div class=member>
+		<code class=name>min: u8</code>
+	</div>
+	<div class=member>
+		<code class=name>sec: u8</code>
+	</div>
+	<div class=member>
+		<code class=name>micros: u32</code>
+	</div>
+</div>
+
+<h3 id=Time.methods><a href=#Time.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Time.init><a href=#Time.init aria-hidden=true>init(hour: u8, min: u8, sec: u8, micros: u32) !Time</a></code>
+		<div class=desc>
+			<p>Creates a <code>Time</code>. This will fail if the time is invalid (e.g. <code>min == 62</code>).</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Time.valid><a href=#Time.valid aria-hidden=true>valid(hour: u8, min: u8, sec: u8, micros: u32) bool</a></code>
+		<div class=desc>
+			<p>Returns <code>true</code> if the time is valid, <code>false</code> otherwise.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Time.parse><a href=#Time.parse aria-hidden=true>parse(str: []const u8, format: Format) !Time</a></code>
+		<div class=desc>
+			<p>Parses the string representation of a time. Currently, the only supported format is <code>.rfc3339</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Time.order><a href=#Time.order aria-hidden=true>order(a: Time, b: Time) std.math.Order</a></code>
+		<div class=desc>
+			<p>Compares two values.</p>
+		</div>
+	</div>
+</div>
