@@ -33,35 +33,42 @@ pub fn LineIteratorSize(comptime size: usize) type {
 			var buffered = &self.buffered;
 			while (true) {
 				const start = buffered.start;
-				const pos = std.mem.indexOfScalar(u8, buffered.buf[start..buffered.end], delimiter) orelse buffered.end - start;
+				if (std.mem.indexOfScalar(u8, buffered.buf[start..buffered.end], delimiter)) |pos| {
+					const written_end = written + pos;
+					if (written_end  > out.len) {
+						return error.StreamTooLong;
+					}
 
-				const delimiter_pos = start + pos;
-
-				const written_end = written + pos;
-				if (written_end > out.len - written) {
-					return error.StreamTooLong;
-				}
-				@memcpy(out[written..written_end], buffered.buf[start..delimiter_pos]);
-				written = written_end;
-
-				// Our call to indexOfScalar handles not found by orlse'ing with
-				// buffered.end - start. This creates a single codepath, above, where
-				// we check optional_max_size and write into writer. However,
-				// if indexOfScalar did find the delimiter, then we're done. If
-				// it didn't, then we need to fill our buffer and keep looking.
-				if (delimiter_pos != buffered.end) {
-						// +1 to skip over the delimiter
+					const delimiter_pos = start + pos;
+					if (written == 0) {
+						// Optimization. We haven't written anything into `out` and we have
+						// a line. We can return this directly from our buffer, no need to
+						// copy it into `out`.
 						buffered.start = delimiter_pos + 1;
-						return out[0..written];
-				}
+						return buffered.buf[start..delimiter_pos];
+					} else {
+						@memcpy(out[written..written_end], buffered.buf[start..delimiter_pos]);
+						buffered.start = delimiter_pos + 1;
+						return out[0..written_end];
+					}
+				} else {
+					// We didn't find the delimiter. That means we need to write the rest
+					// of our buffered content to out, refill our buffer, and try again.
+					const written_end = (written + buffered.end - start);
+					if (written_end > out.len) {
+						return error.StreamTooLong;
+					}
+					@memcpy(out[written..written_end], buffered.buf[start..buffered.end]);
+					written = written_end;
 
-				// fill our buffer
-				const n = try buffered.unbuffered_reader.read(buffered.buf[0..]);
-				if (n == 0) {
-						return null;
+					// fill our buffer
+					const n = try buffered.unbuffered_reader.read(buffered.buf[0..]);
+					if (n == 0) {
+							return null;
+					}
+					buffered.start = 0;
+					buffered.end = n;
 				}
-				buffered.start = 0;
-				buffered.end = n;
 			}
 		}
 	};

@@ -33,7 +33,8 @@ while (try it.next()) |line| {
 	</div>
 	<div class=member>
 		<code class=name id=v4>buf: []const u8</code>
-		<div class=desc><p>Buffer to write the line into, the buffer length represents the maximum allowed line. If a line is longer than <code>buf.len</code> <code><a href="#next">next()</a></code> will return <code>error.StreamTooLong</code>.</p></div>
+		<div class=desc>
+			<p>Buffer to write the line into, the buffer length represents the maximum allowed line. If a line is longer than <code>buf.len</code> <code><a href="#next">next()</a></code> will return <code>error.StreamTooLong</code>.</p></div>
 	</div>
 	<div class=member>
 		<code class=name id=v4>opts: zul.fs.LineIterator.Opts</code>
@@ -62,6 +63,8 @@ while (try it.next()) |line| {
 		<code class=name id=LineIterator.next><a href=#LineIterator.next aria-hidden=true>next(self: LineIterator) !?[]u8</a></code>
 		<div class=desc>
 			<p>Returns the next line, or <code>null</code> if the the end of the file has been reached . The return value is only valid until the next call to <code>next</code> or <code>deinit</code>.</p>
+
+			<p>The return <code>[]u8</code> value may be a slice of the <code>buf</code> parameter passed to <code>readLines</code> or it may be a slice of the internal <code>buffer</code> used for reading the file. In either case the lifetime is the same. When possible, a slice to the internal buffer is used to avoid a copy.</p>
 		</div>
 	</div>
 </div>
