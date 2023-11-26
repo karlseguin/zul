@@ -15,7 +15,7 @@ var line_buffer: [1024]u8 = undefined;
 // 1- an absolute or relative path to the file
 // 2- the line buffer
 // 3- options (here we're using the default)
-var it = try zul.fs.readlines("/tmp/data.txt", &line_buffer, .{});
+var it = try zul.fs.readLines("/tmp/data.txt", &line_buffer, .{});
 defer it.deinit();
 
 while (try it.next()) |line| {
