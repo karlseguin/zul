@@ -154,7 +154,7 @@ const search_result = managed.value;
 ```
 
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)
-Efficiently create and concate dynamic strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.
+Efficiently create/concat strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.
 
 ```zig
 // StringBuilder can be used to efficiently concatenate strings

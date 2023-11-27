@@ -4,7 +4,7 @@ title: zul.StringBuilder
 ---
 
 <h1 id=zul.StringBuilder><a href=#zul.StringBuilder aria-hidden=true>zul.StringBuilder</a></h1>
-<p>Efficiently create and concate dynamic strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.</p>
+<p>Efficiently create/concat strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.</p>
 
 <p>Applications that need to create many <code>StringBuilders</code> should consider using a <code><a href="#Pool">zul.StringBuilder.Pool</a></code>. <code>StringBuilders</code> created via the pool have a re-usable static buffer which can eliminate or reduce the need for dynamic memory allocations (assume the size of the static buffer is larger than the typical data written).</p>
 
