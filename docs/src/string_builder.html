@@ -4,7 +4,9 @@ title: zul.StringBuilder
 ---
 
 <h1 id=zul.StringBuilder><a href=#zul.StringBuilder aria-hidden=true>zul.StringBuilder</a></h1>
-<p>Efficiently create dynamic strings or binary data.</p>
+<p>Efficiently create and concate dynamic strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.</p>
+
+<p>Applications that need to create many <code>StringBuilders</code> should consider using a <code><a href="#Pool">zul.StringBuilder.Pool</a></code>. <code>StringBuilders</code> created via the pool have a re-usable static buffer which can eliminate or reduce the need for dynamic memory allocations (assume the size of the static buffer is larger than the typical data written).</p>
 
 <h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
 {% highlight zig %}
@@ -33,7 +35,7 @@ std.debug.print("{any}\n", .{sb.string()});
 {% endhighlight %}
 
 <h2 id=StringBuilder><a href=#StringBuilder aria-hidden=true>StringBuilder struct</a></h2>
-<p><code>zul.StringBuilder</code> is a wrapper around a dynamically growable <code>[]u8</code> and iis designed for string concatenation or creating binary payloads. While <code>std.ArrayList(u8)</code> can be used for the same purpose, the non-generic nature of <code>StringBuilder</code> results in a cleaner interface.</p>
+<p><code>zul.StringBuilder</code> is a wrapper around a dynamically growable <code>[]u8</code> and is designed for string concatenation or creating binary payloads. While <code>std.ArrayList(u8)</code> can be used for the same purpose, the non-generic nature of <code>StringBuilder</code> results in a cleaner interface.</p>
 
 <h3 id=StringBuilder.fields><a href=#StringBuilder.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -251,3 +253,49 @@ fn fromReader(
 <p>When the <code><a href=#StringBuilder.skip>sb.skip()</a></code> method is called, a <code>View</code> is returned to backfill the skipped space. This is API exists to "reserve" space within the buffer for data unknown until a later point. The typical example is a length-prefixed message where the length is only known after the message has been written.</p>
 
 <p>The <code>View</code> exposes all of the same <code>write*</code> methods as the <code>StringBuilder</code>, but will not grow the buffer and <strong>does no bound-checking</strong>.</p>
+
+<h2 id=Pool><a href=#Pool aria-hidden=true>Pool struct</a></h2>
+<p><code>zul.StringBuilder.Pool</code> is a thread-safe pool of <code>zul.StringBuilders</code> that will grow as needed. Each <code>zul.StringBuilder</code> has a re-usable static buffer which will be used before any dynamic allocations are needed.</p>
+
+{% highlight zig %}
+// create a pool of 10 StringBuilders
+// with each StringBuilder having a re-usable static buffer of 1024 bytes.
+// pool is thread-safe
+var pool = zul.StringBuilder.Pool.init(t.allocator, 10, 1024);
+defer pool.deinit();
+
+var sb = try pool.acquire();
+defer pool.release(sb);
+
+// Use sb as documented above
+sb.write("hello world");
+...
+{% endhighlight %}
+
+<h3 id=Pool.methods><a href=#Pool.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Pool.init><a href=#Pool.init aria-hidden=true>init(allocator: Allocator, pool_size: u16, static_size: usize) Pool</a></code>
+		<div class=desc>
+			<p>Creates a <code>StringBuilder.Pool</code>. The pool will have <code>pool_size</code> <code>StringBuilders</code>, and each <code>StringBuilder</code> will maintain a static buffer of <code>static_size</code> bytes.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Pool.deinit><a href=#Pool.deinit aria-hidden=true>deinit(self: *Pool) void</a></code>
+		<div class=desc>
+			<p>Releases all allocated memory. The <code>Pool</code> and any of its <code>StringBuilders</code> should not be used after this is called.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Pool.acquire><a href=#Pool.acquire aria-hidden=true>acquire(self: *Pool) ?*StringBuilder</a></code>
+		<div class=desc>
+			<p>Retrieves a <code>StringBuilder</code> from the pool. If the pool is empty, will attempt to create a new one. This method is thread-safe.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Pool.acquire><a href=#Pool.acquire aria-hidden=true>release(self: *Pool, sb: *StringBuilder) void</a></code>
+		<div class=desc>
+			<p>Releases the <code>StringBuilder</code> back into the pool. If the pool is full, the <code>StringBuilder</code> is freed. This method is thread-safe.</p>
+		</div>
+	</div>
+</div>

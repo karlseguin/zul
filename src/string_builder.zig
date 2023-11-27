@@ -1,153 +1,41 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const string_builder = @This();
 
+const Mutex = std.Thread.Mutex;
 const Endian = std.builtin.Endian;
 const Allocator = std.mem.Allocator;
-
-pub const View = struct {
-	pos: usize,
-	sb: *StringBuilder,
-
-	pub fn writeByte(self: *View, b: u8) void {
-		const pos = self.pos;
-		writeByteInto(self.sb.buf, pos, b);
-		self.pos = pos + 1;
-	}
-
-	pub fn writeByteNTimes(self: *View, b: u8, n: usize) void {
-		const pos = self.pos;
-		writeByteNTimesInto(self.sb.buf, pos, b, n);
-		self.pos = pos + n;
-	}
-
-	pub fn write(self: *View, data: []const u8) void {
-		const pos = self.pos;
-		writeInto(self.sb.buf, pos, data);
-		self.pos = pos + data.len;
-	}
-
-	pub fn writeU16(self: *View, value: u16) void {
-		return self.writeIntT(u16, value, self.endian);
-	}
-
-	pub fn writeI16(self: *View, value: i16) void {
-		return self.writeIntT(i16, value, self.endian);
-	}
-
-	pub fn writeU32(self: *View, value: u32) void {
-		return self.writeIntT(u32, value, self.endian);
-	}
-
-	pub fn writeI32(self: *View, value: i32) void {
-		return self.writeIntT(i32, value, self.endian);
-	}
-
-	pub fn writeU64(self: *View, value: u64) void {
-		return self.writeIntT(u64, value, self.endian);
-	}
-
-	pub fn writeI64(self: *View, value: i64) void {
-		return self.writeIntT(i64, value, self.endian);
-	}
-
-	pub fn writeU16Little(self: *View, value: u16) void {
-		return self.writeIntT(u16, value, .little);
-	}
-
-	pub fn writeI16Little(self: *View, value: i16) void {
-		return self.writeIntT(i16, value, .little);
-	}
-
-	pub fn writeU32Little(self: *View, value: u32) void {
-		return self.writeIntT(u32, value, .little);
-	}
-
-	pub fn writeI32Little(self: *View, value: i32) void {
-		return self.writeIntT(i32, value, .little);
-	}
-
-	pub fn writeU64Little(self: *View, value: u64) void {
-		return self.writeIntT(u64, value, .little);
-	}
-
-	pub fn writeI64Little(self: *View, value: i64) void {
-		return self.writeIntT(i64, value, .little);
-	}
-
-	pub fn writeU16Big(self: *View, value: u16) void {
-		return self.writeIntT(u16, value, .big);
-	}
-
-	pub fn writeI16Big(self: *View, value: i16) void {
-		return self.writeIntT(i16, value, .big);
-	}
-
-	pub fn writeU32Big(self: *View, value: u32) void {
-		return self.writeIntT(u32, value, .big);
-	}
-
-	pub fn writeI32Big(self: *View, value: i32) void {
-		return self.writeIntT(i32, value, .big);
-	}
-
-	pub fn writeU64Big(self: *View, value: u64) void {
-		return self.writeIntT(u64, value, .big);
-	}
-
-	pub fn writeI64Big(self: *View, value: i64) void {
-		return self.writeIntT(i64, value, .big);
-	}
-
-	fn writeIntT(self: *View, comptime T: type, value: T, endian: Endian) void {
-		const l = @divExact(@typeInfo(T).Int.bits, 8);
-		const pos = self.pos;
-		writeIntInto(T, self.sb.buf, pos, value, l, endian);
-		self.pos = pos + l;
-	}
-
-	pub fn writeInt(self: *View, value: anytype) void {
-		return self.writeIntAs(value, self.endian);
-	}
-
-	pub fn writeIntAs(self: *View, value: anytype, endian: Endian) void {
-		const T = @TypeOf(value);
-		switch (@typeInfo(T)) {
-			.ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
-			.Int => |int| {
-				if (int.signedness == .signed) {
-					switch (int.bits) {
-						8 => return self.writeByte(value),
-						16 => return self.writeIntT(i16, value, endian),
-						32 => return self.writeIntT(i32, value, endian),
-						64 => return self.writeIntT(i64, value, endian),
-						else => {},
-					}
-				} else {
-					switch (int.bits) {
-						8 => return self.writeByte(value),
-						16 => return self.writeIntT(u16, value, endian),
-						32 => return self.writeIntT(u32, value, endian),
-						64 => return self.writeIntT(u64, value, endian),
-						else => {},
-					}
-				}
-			},
-			else => {},
-		}
-		@compileError("Unsupported integer type: " ++ @typeName(T));
-	}
-};
 
 pub const StringBuilder = struct {
 	buf: []u8,
 	pos: usize,
+	static: []u8,
 	endian: Endian = builtin.cpu.arch.endian(),
 	allocator: Allocator,
 
+	pub const Pool = string_builder.Pool;
+
+	// This is for one-off use. It's like creating an std.ArrayList(u8). We won't
+	// use static at all, and everything will just be dynamic.
 	pub fn init(allocator: Allocator) StringBuilder {
 		return .{
 			.pos = 0,
 			.buf = &[_]u8{},
+			.static = &[_]u8{},
+			.allocator = allocator,
+		};
+	}
+
+	// This is being created by our Pool, either in Pool.init or lazily in
+	// pool.acquire(). The idea is that this buffer will get re-used so it has
+	// a static buffer that will get used, and we'll only need to dynamically
+	// allocate memory beyond static if we try to write more than static.len.
+	fn initForPool(allocator: Allocator, static_size: usize) !StringBuilder {
+		const static = try allocator.alloc(u8, static_size);
+		return .{
+			.pos = 0,
+			.buf = static,
+			.static = static,
 			.allocator = allocator,
 		};
 	}
@@ -157,6 +45,7 @@ pub const StringBuilder = struct {
 		return .{
 			.buf = buf,
 			.pos = buf.len,
+			.static = &[_]u8{},
 			.allocator = allocator,
 		};
 	}
@@ -405,14 +294,20 @@ pub const StringBuilder = struct {
 			if (new_capacity >= required_capacity) break;
 		}
 
+		const is_static = self.buf.ptr == self.static.ptr;
+
 		const allocator = self.allocator;
-		if (allocator.resize(buf, new_capacity)) {
+		if (is_static and allocator.resize(buf, new_capacity)) {
 			self.buf = buf.ptr[0..new_capacity];
 			return;
 		}
 		const new_buffer = try allocator.alloc(u8, new_capacity);
 		@memcpy(new_buffer[0..buf.len], buf);
-		allocator.free(buf);
+
+		if (!is_static) {
+			// we don't free the static buffer
+			allocator.free(buf);
+		}
 		self.buf = new_buffer;
 	}
 
@@ -435,6 +330,233 @@ pub const StringBuilder = struct {
 			return data.len;
 		}
 	};
+};
+
+pub const View = struct {
+	pos: usize,
+	sb: *StringBuilder,
+
+	pub fn writeByte(self: *View, b: u8) void {
+		const pos = self.pos;
+		writeByteInto(self.sb.buf, pos, b);
+		self.pos = pos + 1;
+	}
+
+	pub fn writeByteNTimes(self: *View, b: u8, n: usize) void {
+		const pos = self.pos;
+		writeByteNTimesInto(self.sb.buf, pos, b, n);
+		self.pos = pos + n;
+	}
+
+	pub fn write(self: *View, data: []const u8) void {
+		const pos = self.pos;
+		writeInto(self.sb.buf, pos, data);
+		self.pos = pos + data.len;
+	}
+
+	pub fn writeU16(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, self.endian);
+	}
+
+	pub fn writeI16(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, self.endian);
+	}
+
+	pub fn writeU32(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, self.endian);
+	}
+
+	pub fn writeI32(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, self.endian);
+	}
+
+	pub fn writeU64(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, self.endian);
+	}
+
+	pub fn writeI64(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, self.endian);
+	}
+
+	pub fn writeU16Little(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, .little);
+	}
+
+	pub fn writeI16Little(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, .little);
+	}
+
+	pub fn writeU32Little(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, .little);
+	}
+
+	pub fn writeI32Little(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, .little);
+	}
+
+	pub fn writeU64Little(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, .little);
+	}
+
+	pub fn writeI64Little(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, .little);
+	}
+
+	pub fn writeU16Big(self: *View, value: u16) void {
+		return self.writeIntT(u16, value, .big);
+	}
+
+	pub fn writeI16Big(self: *View, value: i16) void {
+		return self.writeIntT(i16, value, .big);
+	}
+
+	pub fn writeU32Big(self: *View, value: u32) void {
+		return self.writeIntT(u32, value, .big);
+	}
+
+	pub fn writeI32Big(self: *View, value: i32) void {
+		return self.writeIntT(i32, value, .big);
+	}
+
+	pub fn writeU64Big(self: *View, value: u64) void {
+		return self.writeIntT(u64, value, .big);
+	}
+
+	pub fn writeI64Big(self: *View, value: i64) void {
+		return self.writeIntT(i64, value, .big);
+	}
+
+	fn writeIntT(self: *View, comptime T: type, value: T, endian: Endian) void {
+		const l = @divExact(@typeInfo(T).Int.bits, 8);
+		const pos = self.pos;
+		writeIntInto(T, self.sb.buf, pos, value, l, endian);
+		self.pos = pos + l;
+	}
+
+	pub fn writeInt(self: *View, value: anytype) void {
+		return self.writeIntAs(value, self.endian);
+	}
+
+	pub fn writeIntAs(self: *View, value: anytype, endian: Endian) void {
+		const T = @TypeOf(value);
+		switch (@typeInfo(T)) {
+			.ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
+			.Int => |int| {
+				if (int.signedness == .signed) {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(i16, value, endian),
+						32 => return self.writeIntT(i32, value, endian),
+						64 => return self.writeIntT(i64, value, endian),
+						else => {},
+					}
+				} else {
+					switch (int.bits) {
+						8 => return self.writeByte(value),
+						16 => return self.writeIntT(u16, value, endian),
+						32 => return self.writeIntT(u32, value, endian),
+						64 => return self.writeIntT(u64, value, endian),
+						else => {},
+					}
+				}
+			},
+			else => {},
+		}
+		@compileError("Unsupported integer type: " ++ @typeName(T));
+	}
+};
+
+pub const Pool = struct {
+	mutex: Mutex,
+	available: usize,
+	allocator: Allocator,
+	static_size: usize,
+	builders: []*StringBuilder,
+
+	pub fn init(allocator: Allocator, pool_size: u16, static_size: usize) !Pool {
+		const builders = try allocator.alloc(*StringBuilder, pool_size);
+		errdefer allocator.free(builders);
+
+		var allocated: usize = 0;
+		errdefer {
+			for (0..allocated) |i| {
+				var sb = builders[i];
+				sb.deinit();
+				allocator.destroy(sb);
+			}
+		}
+
+		for (0..pool_size) |i| {
+			const sb = try allocator.create(StringBuilder);
+			errdefer allocator.destroy(sb);
+			sb.* = try StringBuilder.initForPool(allocator, static_size);
+			builders[i] = sb;
+			allocated += 1;
+		}
+
+		return .{
+			.mutex = .{},
+			.builders = builders,
+			.allocator = allocator,
+			.available = pool_size,
+			.static_size = static_size
+		};
+	}
+
+	pub fn deinit(self: *Pool) void {
+		const allocator = self.allocator;
+		for (self.builders) |sb| {
+			sb.deinit();
+			allocator.destroy(sb);
+		}
+		allocator.free(self.builders);
+	}
+
+	pub fn acquire(self: *Pool) !*StringBuilder {
+		const builders = self.builders;
+
+		self.mutex.lock();
+		const available = self.available;
+		if (available == 0) {
+			// dont hold the lock over factory
+			self.mutex.unlock();
+
+			const allocator = self.allocator;
+			const sb = try allocator.create(StringBuilder);
+			errdefer allocator.destroy(sb);
+			sb.* = try StringBuilder.initForPool(allocator, self.static_size);
+			return sb;
+		}
+		const index = available - 1;
+		const sb = builders[index];
+		self.available = index;
+		self.mutex.unlock();
+		return sb;
+	}
+
+	pub fn release(self: *Pool, sb: *StringBuilder) void {
+		sb.pos = 0;
+		const allocator = self.allocator;
+		if (sb.buf.ptr != sb.static.ptr) {
+			// Free the dynamic memory we allocated
+			allocator.free(sb.buf);
+			// reset buf to our static
+			sb.buf = sb.static;
+		}
+		self.mutex.lock();
+
+		var builders = self.builders;
+		const available = self.available;
+		if (available == builders.len) {
+			self.mutex.unlock();
+			sb.deinit();
+			allocator.destroy(sb);
+			return;
+		}
+		builders[available] = sb;
+		self.available = available + 1;
+		self.mutex.unlock();
+	}
 };
 
 // Functions that write for either a *StringBuilder or a *View
@@ -801,5 +923,103 @@ test "StringBuilder: fromReader" {
 		});
 		defer sb.deinit();
 		try t.expectEqual(&buf, sb.string());
+	}
+}
+
+test "StringBuilder.Pool: StringBuilder" {
+	var p = try Pool.init(t.allocator, 1, 10);
+	defer p.deinit();
+
+	// This test is testing that a single StringBuilder's lifecycle through
+	// multiple acquire/release. In order to make sure that's what this code is
+	// actually testing, we need to make sure that we're always dealing with the
+	// same string builder.
+	var prev = p.acquire() catch unreachable();
+	p.release(prev);
+
+	var buf: [500]u8 = undefined;
+
+	for (0..20) |_| {
+		const sb = p.acquire() catch unreachable;
+		defer p.release(sb);
+
+		// for the integrity of this test, make sure we're always touching the same
+		// StringBuilder
+		try t.expectEqual(sb, prev);
+		prev = sb;
+
+		// fits in static
+		try sb.write("01234");
+		try t.expectEqual("01234", sb.string());
+
+		// fits in static
+		try sb.write("56789");
+		try t.expectEqual("0123456789", sb.string());
+
+		// requires dynamic allocation
+		try sb.write("abcde");
+		try t.expectEqual("0123456789abcde", sb.string());
+
+		try sb.write("0123456789abcde");
+		try t.expectEqual("0123456789abcde0123456789abcde", sb.string());
+
+		const bytes = t.Random.fillAtLeast(&buf, 1);
+		try sb.write(bytes);
+
+		const str = sb.string();
+		try t.expectEqual("0123456789abcde0123456789abcde", str[0..30]);
+		try t.expectEqual(bytes, str[30..]);
+	}
+}
+
+test "StringBuilder.Pool: acquire and release" {
+	var p = try Pool.init(t.allocator, 2, 100);
+	defer p.deinit();
+
+	const sb1a = p.acquire() catch unreachable;
+	const sb2a = p.acquire() catch unreachable;
+	const sb3a = p.acquire() catch unreachable; // this should be dynamically generated
+
+	try t.expectEqual(false, sb1a == sb2a);
+	try t.expectEqual(false, sb2a == sb3a);
+
+	p.release(sb1a);
+
+	const sb1b = p.acquire() catch unreachable;
+	try t.expectEqual(true, sb1a == sb1b);
+
+	p.release(sb3a);
+	p.release(sb2a);
+	p.release(sb1b);
+}
+
+test "StringBuilder.Pool: threadsafety" {
+	var p = try Pool.init(t.allocator, 3, 20);
+	defer p.deinit();
+
+	// initialize this to 0 since we're asserting that it's 0
+	for (p.builders) |sb| {
+		sb.static[0] = 0;
+	}
+
+	const t1 = try std.Thread.spawn(.{}, testPool, .{&p, 1});
+	const t2 = try std.Thread.spawn(.{}, testPool, .{&p, 2});
+	const t3 = try std.Thread.spawn(.{}, testPool, .{&p, 3});
+
+	t1.join(); t2.join(); t3.join();
+}
+
+fn testPool(p: *Pool, i: u8) void {
+	for (0..1000) |_| {
+		var sb = p.acquire() catch unreachable;
+		// no other thread should have changed this
+		std.debug.assert(sb.static[0] == 0);
+
+		sb.static[0] = i;
+		std.time.sleep(t.Random.intRange(u32, 1000, 10000));
+		// no other thread should have set this to 0
+		std.debug.assert(sb.static[0] == i);
+		sb.static[0] = 0;
+		p.release(sb);
 	}
 }

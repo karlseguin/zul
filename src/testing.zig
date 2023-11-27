@@ -11,10 +11,19 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 		},
 		.Pointer => |ptr| if (ptr.child == u8) {
 			return std.testing.expectEqualStrings(expected, actual);
+		} else if (comptime isStringArray(ptr.child)) {
+			return std.testing.expectEqualStrings(expected, actual);
 		},
 		else => {},
 	}
 	return std.testing.expectEqual(@as(@TypeOf(actual), expected), actual);
+}
+
+fn isStringArray(comptime T: type) bool {
+	if (!std.meta.trait.is(.Array)(T) and !std.meta.trait.isPtrTo(.Array)(T)) {
+		return false;
+	}
+	return std.meta.Elem(T) == u8;
 }
 
 pub fn expectDelta(expected: anytype, actual: anytype, delta: anytype) !void {
