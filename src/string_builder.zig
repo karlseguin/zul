@@ -523,8 +523,15 @@ pub const Pool = struct {
 
 			const allocator = self.allocator;
 			const sb = try allocator.create(StringBuilder);
-			errdefer allocator.destroy(sb);
-			sb.* = try StringBuilder.initForPool(allocator, self.static_size);
+			// Intentionally not using initForPool here. There's a tradeoff.
+			// If we use initForPool, than this StringBuilder could be re-added to the
+			// pool on release, which would help keep our pool nice and full. However,
+			// many applications will use a very large static_size to avoid or minimize
+			// dynamic allocations and grows/copies. They do this thinking all of that
+			// static buffers are allocated upfront, on startup. Doing it here would
+			// result in an unexpected large allocation, the exact opposite of what
+			// we're after.
+			sb.* = StringBuilder.init(allocator);
 			return sb;
 		}
 		const index = available - 1;
@@ -535,24 +542,28 @@ pub const Pool = struct {
 	}
 
 	pub fn release(self: *Pool, sb: *StringBuilder) void {
-		sb.pos = 0;
 		const allocator = self.allocator;
-		if (sb.buf.ptr != sb.static.ptr) {
-			// Free the dynamic memory we allocated
-			allocator.free(sb.buf);
-			// reset buf to our static
-			sb.buf = sb.static;
-		}
-		self.mutex.lock();
 
-		var builders = self.builders;
-		const available = self.available;
-		if (available == builders.len) {
-			self.mutex.unlock();
-			sb.deinit();
+		if (sb.static.len == 0) {
+			// this buffer was allocated by acquire() because the pool was empty
+			// it has no static buffer, so we release it
+			allocator.free(sb.buf);
 			allocator.destroy(sb);
 			return;
 		}
+
+		sb.pos = 0;
+		if (sb.buf.ptr != sb.static.ptr) {
+			// If buf.ptr != static.ptr, that means we had to dymamically allocate a
+			// buffer beyond static. Free that dynamically allocated buffer...
+			allocator.free(sb.buf);
+			// ... and restore the static buffer;
+			sb.buf = sb.static;
+		}
+
+		self.mutex.lock();
+		const available = self.available;
+		var builders = self.builders;
 		builders[available] = sb;
 		self.available = available + 1;
 		self.mutex.unlock();
