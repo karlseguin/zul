@@ -20,10 +20,37 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 }
 
 fn isStringArray(comptime T: type) bool {
-	if (!std.meta.trait.is(.Array)(T) and !std.meta.trait.isPtrTo(.Array)(T)) {
+	if (!is(.Array)(T) and !isPtrTo(.Array)(T)) {
 		return false;
 	}
 	return std.meta.Elem(T) == u8;
+}
+
+pub const TraitFn = fn (type) bool;
+pub fn is(comptime id: std.builtin.TypeId) TraitFn {
+	const Closure = struct {
+		pub fn trait(comptime T: type) bool {
+			return id == @typeInfo(T);
+		}
+	};
+	return Closure.trait;
+}
+
+pub fn isPtrTo(comptime id: std.builtin.TypeId) TraitFn {
+	const Closure = struct {
+		pub fn trait(comptime T: type) bool {
+			if (!comptime isSingleItemPtr(T)) return false;
+			return id == @typeInfo(std.meta.Child(T));
+		}
+	};
+	return Closure.trait;
+}
+
+pub fn isSingleItemPtr(comptime T: type) bool {
+	if (comptime is(.Pointer)(T)) {
+		return @typeInfo(T).Pointer.size == .One;
+	}
+	return false;
 }
 
 pub fn expectDelta(expected: anytype, actual: anytype, delta: anytype) !void {

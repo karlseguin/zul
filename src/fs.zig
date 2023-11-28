@@ -119,9 +119,9 @@ pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, o
 pub fn readDir(dir_path: []const u8) !Iterator {
 	const dir = blk: {
 		if (std.fs.path.isAbsolute(dir_path)) {
-			break :blk try std.fs.openIterableDirAbsolute(dir_path, .{});
+			break :blk try std.fs.openDirAbsolute(dir_path, .{});
 		} else {
-			break :blk try std.fs.cwd().openIterableDir(dir_path, .{});
+			break :blk try std.fs.cwd().openDir(dir_path, .{});
 		}
 	};
 
@@ -132,12 +132,12 @@ pub fn readDir(dir_path: []const u8) !Iterator {
 }
 
 pub const Iterator = struct {
-	dir: IterableDir,
-	it: IterableDir.Iterator,
+	dir: Dir,
+	it: Dir.Iterator,
 	arena: ?*std.heap.ArenaAllocator = null,
 
-	const IterableDir = std.fs.IterableDir;
-	const Entry = IterableDir.Entry;
+	const Dir = std.fs.Dir;
+	const Entry = Dir.Entry;
 
 	pub const Sort = enum{
 		none,
@@ -159,11 +159,11 @@ pub const Iterator = struct {
 		self.it.reset();
 	}
 
-	pub fn next(self: *Iterator) !?std.fs.IterableDir.Entry{
+	pub fn next(self: *Iterator) !?std.fs.Dir.Entry{
 		return self.it.next();
 	}
 
-	pub fn all(self: *Iterator, allocator: Allocator, sort: Sort) ![]std.fs.IterableDir.Entry {
+	pub fn all(self: *Iterator, allocator: Allocator, sort: Sort) ![]std.fs.Dir.Entry {
 		var arena = try allocator.create(std.heap.ArenaAllocator);
 		errdefer allocator.destroy(arena);
 
