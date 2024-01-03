@@ -137,7 +137,7 @@ pub const StringBuilder = struct {
 	}
 
 	pub fn writeByte(self: *StringBuilder, b: u8) !void {
-		try self.ensureUnusedCapacity(b);
+		try self.ensureUnusedCapacity(1);
 		self.writeByteAssumeCapacity(b);
 	}
 
