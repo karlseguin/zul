@@ -20,7 +20,7 @@ std.debug.print("{d} == {s}", .{dt.unix(.milliseconds), dt});
 <h2 id=DateTime><a href=#DateTime aria-hidden=true>DateTime struct</a></h2>
 <p><code>zul.DateTime</code> is a very basic DateTime struct designed for the main purpose of allowing RFC3339 dates to be read and written. It is simply an <code>i64</code> representing the number of microseconds since unix epoch (Jan 1 1970). It supports valus ranging from Jan 1, -4712 to Dec 31, 9999. It does not support leap seconds and only supports UTC timezones.</p>
 
-<p>When serialized to JSON, or formatted using <code>std.fmt</code>, the RFC3339 representation is used.</p>
+<p>When serialized and parsed with JSON, or formatted using <code>std.fmt</code>, the RFC3339 representation is used.</p>
 
 <h3 id=DateTime.fields><a href=#DateTime.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -105,7 +105,7 @@ fn initUTC(
 </div>
 
 <h2 id=Date><a href=#Date aria-hidden=true>Date struct</a></h2>
-<p><code>zul.Date</code> represents a year, month and day. It is serialized to JSON or using <code>std.fmt</code> using the <code>YYYY-MM-DD</code> format (i.e. ISO8601).</p>
+<p><code>zul.Date</code> represents a year, month and day. It is serialized and parsed to JSON or using <code>std.fmt</code> using the <code>YYYY-MM-DD</code> format (i.e. ISO8601).</p>
 
 <h3 id=Date.fields><a href=#Date.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -150,7 +150,7 @@ fn initUTC(
 </div>
 
 <h2 id=Time><a href=#Time aria-hidden=true>Time struct</a></h2>
-<p><code>zul.Time</code> represents a hour, minute, second and microsecond. It is serialized to JSON or using <code>std.fmt</code> using the <code>HH:MM:SS[.000000]</code> format (i.e. RFC3339).</p>
+<p><code>zul.Time</code> represents a hour, minute, second and microsecond. It is serialized and parsed to JSON or using <code>std.fmt</code> using the <code>HH:MM:SS[.000000]</code> format (i.e. RFC3339).</p>
 
 <h3 id=Time.fields><a href=#Time.fields aria-hidden=true>Fields</a></h3>
 <div>

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const Allocator = std.mem.Allocator;
+
 pub const Date = struct {
 	year: i16,
 	month: u8,
@@ -83,6 +85,16 @@ pub const Date = struct {
 		buf[0] = '"';
 		buf[n+1] = '"';
 		try out.print("{s}", .{buf[0..n+2]});
+	}
+
+	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !Date {
+		_ = allocator;
+		_ = options;
+
+		switch (try source.next()) {
+			.string => |str| return Date.parse(str, .iso8601) catch return error.InvalidCharacter,
+			else => return error.UnexpectedToken,
+		}
 	}
 };
 
@@ -169,6 +181,16 @@ pub const Time = struct {
 		buf[0] = '"';
 		buf[n+1] = '"';
 		try out.print("{s}", .{buf[0..n+2]});
+	}
+
+	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !Time {
+		_ = allocator;
+		_ = options;
+
+		switch (try source.next()) {
+			.string => |str| return Time.parse(str, .rfc3339) catch return error.InvalidCharacter,
+			else => return error.UnexpectedToken,
+		}
 	}
 };
 
@@ -410,6 +432,16 @@ pub const DateTime = struct {
 		try out.print("{s}", .{buf[0..n+2]});
 	}
 
+	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !DateTime {
+		_ = allocator;
+		_ = options;
+
+		switch (try source.next()) {
+			.string => |str| return parseRFC3339(str) catch return error.InvalidCharacter,
+			else => return error.UnexpectedToken,
+		}
+	}
+
 	fn bufWrite(self: DateTime, buf: []u8) usize {
 		const date_n = writeDate(buf, self.date());
 
@@ -627,6 +659,13 @@ test "Date: json" {
 		defer t.allocator.free(out);
 		try t.expectEqual("\"-0004-12-03\"", out);
 	}
+
+	{
+		// parse
+		const ts = try std.json.parseFromSlice(TestStruct, t.allocator, "{\"date\":\"2023-09-22\"}", .{});
+		defer ts.deinit();
+		try t.expectEqual(Date{.year = 2023, .month = 9, .day = 22}, ts.value.date.?);
+	}
 }
 
 test "Date: format" {
@@ -782,6 +821,13 @@ test "Time: json" {
 		const out = try std.json.stringifyAlloc(t.allocator, time, .{});
 		defer t.allocator.free(out);
 		try t.expectEqual("\"01:02:03.123456\"", out);
+	}
+
+	{
+		// parse
+		const ts = try std.json.parseFromSlice(TestStruct, t.allocator, "{\"time\":\"01:02:03.123456\"}", .{});
+		defer ts.deinit();
+		try t.expectEqual(Time{.hour = 1, .min = 2, .sec = 3, .micros = 123456}, ts.value.time.?);
 	}
 }
 
@@ -1406,6 +1452,13 @@ test "DateTime: json" {
 		defer t.allocator.free(out);
 		try t.expectEqual("\"-0004-12-03T01:02:03.123456Z\"", out);
 	}
+
+	{
+		// parse
+		const ts = try std.json.parseFromSlice(TestStruct, t.allocator, "{\"datetime\":\"2023-09-22T07:09:32.202Z\"}", .{});
+		defer ts.deinit();
+		try t.expectEqual(try DateTime.parse("2023-09-22T07:09:32.202Z", .rfc3339), ts.value.datetime.?);
+	}
 }
 
 test "DateTime: format" {
@@ -1812,3 +1865,9 @@ fn expectDateTime(expected: []const u8, dt: DateTime) !void {
 	const actual = try std.fmt.bufPrint(&buf, "{s}", .{dt});
 	try t.expectEqual(expected, actual);
 }
+
+const TestStruct = struct {
+	date: ?Date = null,
+	time: ?Time = null,
+	datetime: ?DateTime = null,
+};
