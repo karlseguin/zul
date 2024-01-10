@@ -1,0 +1,111 @@
+---
+layout: site.njk
+title: zul.pool
+---
+
+<h1 id=zul.pool.Growing><a href=#zul.pool.Growing aria-hidden=true>zul.pool.Growing</a></h1>
+<p>A thread-safe object pool which will dynamically grow when empty and revert to the configured size.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// create a pool for our Expensive class.
+// Our Expensive class takes a special initializing context, here an usize which
+// we set to 10_000. This is just to pass data from the pool into Expensive.init
+var pool = try zul.pool.Growing(Expensive, usize).init(allocator, 10_000, .{.count = 100});
+defer pool.deinit();
+
+// acquire will either pick an item from the pool
+// if the pool is empty, it'll create a new one (hence, "Growing")
+var exp1 = try pool.acquire();
+defer pool.release(exp1);
+
+...
+
+// pooled object must have 3 functions
+const Expensive = struct {
+	// an init function
+	pub fn init(allocator: Allocator, size: usize) !Expensive {
+		return .{
+			// ...
+		};
+	}
+
+	// a deinit method
+	pub fn deinit(self: *Expensive) void {
+		// ...
+	}
+
+	// a reset method, called when the item is released back to the pool
+	pub fn reset(self: *Expensive) void {
+		// ...
+	}
+};
+{% endhighlight %}
+
+<h2><code>fn Growing(comptime T: type, comptime C: type) Growing(T, C)</code></h2>
+<p>The <code>Growing</code> pool is a generic function that takes two parameters. <code>T</code> is the type of object being pool. <code>C</code> is the type of data to pass into <code>T.init</code>. In many cases, <code>C</code> will be <code>void</code>, in which case <code>T.init</code> will not receive the value:</p>
+
+{% highlight zig %}
+var pool = try zul.pool.Growing(Expensive, void).init(allocator, {}, .{.count = 100});
+defer pool.deinit();
+
+...
+
+const Expensive = struct {
+	// Because the context was defined as `void`, the `init` function does not
+	// take a 2nd paremeter.
+	pub fn init(allocator: Allocator) !Expensive {
+		return .{
+			// ...
+		};
+	}
+
+	// ...
+};
+{% endhighlight %}
+
+<p><code>T</code> must have an <code>init(allocator: Allocator, ctx: C) !T</code> function. It must also have the following two methods: <code>deinit(self: *T) void</code> and <code>reset(self: *T) void</code>. Because the pool will dynamically create <code>T</code> when empty, <code>deinit</code> will be called when items are released back into a full pool (as well as when <code>pool.deinit</code> is called). <code>reset</code> is called whenever an item is released back into the pool.</p>
+
+
+<h3 id=Growing.methods><a href=#Growing.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Growing.init><a href=#Growing.init aria-hidden=true>init(...) !Growing</a></code>
+{% highlight zig %}
+fn init(
+	// Allocator is used to create the pool, create the pooled items, and is passed
+	// to the T.init
+	allocator: std.mem.Allocator,
+
+	// An arbitrary context to passed to T.init
+	ctx: C
+
+	opts: .{
+		// number of items to keep in the pool
+		.count = usize,
+	}
+) !Growing(T, C)
+{% endhighlight %}
+		<div class=desc>
+			<p>Creates a <code>pool.Growing</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Growing.deinit><a href=#Growing.deinit aria-hidden=true>deinit(self: *Growing(T, C)) void</a></code>
+		<div class=desc>
+			<p>This is method thread-safe.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Growing.acquire><a href=#Growing.acquire aria-hidden=true>acquire(self: *Growing(T, C)) !*T</a></code>
+		<div class=desc>
+			<p>Returns an <code>*T</code>. When available, <code>*T</code> will be retrieved from the pooled objects. When the pool is empty, a new <code>*T</code> is created.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Growing.release><a href=#Growing.release aria-hidden=true>release(self: *Growing(T, C), t: *T) void</a></code>
+		<div class=desc>
+			<p>Releases <code>*T</code> back into the pool. If the pool is full, <code>t.deinit()</code> is called and then discarded.</p>
+		</div>
+	</div>
+</div>

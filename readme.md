@@ -153,6 +153,44 @@ defer managed.deinit();
 const search_result = managed.value;
 ```
 
+## [zul.pool](https://www.goblgobl.com/zul/pool/)
+A thread-safe object pool which will dynamically grow when empty and revert to the configured size.
+
+```zig
+// create a pool for our Expensive class.
+// Our Expensive class takes a special initializing context, here an usize which
+// we set to 10_000. This is just to pass data from the pool into Expensive.init
+var pool = try zul.pool.Growing(Expensive, usize).init(allocator, 10_000, .{.count = 100});
+defer pool.deinit();
+
+// acquire will either pick an item from the pool
+// if the pool is empty, it'll create a new one (hence, "Growing")
+var exp1 = try pool.acquire();
+defer pool.release(exp1);
+
+...
+
+// pooled object must have 3 functions
+const Expensive = struct {
+	// an init function
+	pub fn init(allocator: Allocator, size: usize) !Expensive {
+		return .{
+			// ...
+		};
+	}
+
+	// a deinit method
+	pub fn deinit(self: *Expensive) void {
+		// ...
+	}
+
+	// a reset method, called when the item is released back to the pool
+	pub fn reset(self: *Expensive) void {
+		// ...
+	}
+};
+```
+
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)
 Efficiently create/concat strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.
 

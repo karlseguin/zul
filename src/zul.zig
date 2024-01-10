@@ -3,13 +3,13 @@ const std = @import("std");
 pub const fs = @import("fs.zig");
 pub const http = @import("http.zig");
 pub const uuid = @import("uuid.zig");
+pub const pool = @import("pool.zig");
 pub const testing = @import("testing.zig");
 pub const benchmark = @import("benchmark.zig");
 
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
 
 const datetime = @import("datetime.zig");
-
 pub const Date = datetime.Date;
 pub const Time = datetime.Time;
 pub const DateTime = datetime.DateTime;

@@ -56,7 +56,7 @@ std.debug.print("{any}\n", .{sb.string()});
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=StringBuilder.deinit><a href=#StringBuilder.deinit aria-hidden=true>deinit(self: StringBuilder) StringBuilder</a></code>
+		<code class=name id=StringBuilder.deinit><a href=#StringBuilder.deinit aria-hidden=true>deinit(self: StringBuilder) void</a></code>
 		<div class=desc>
 			<p>Releases all allocated memory. The <code>StringBuilder</code> should not be used after this is called.</p>
 		</div>
@@ -85,7 +85,7 @@ std.debug.print("{any}\n", .{sb.string()});
 {% highlight zig %}
 fn fromOwnedSlice(
 	// When deinit is called on the returned StringBuilder, buf will be freed
-	// with tthis allocator. Thus, buf must have been created with this
+	// with this allocator. Thus, buf must have been created with this
 	// allocator.
 	allocator: std.mem.Allocator,
 
