@@ -389,7 +389,7 @@ const TestEcho = struct {
 
 fn startTestServer() !std.Thread {
 	var server = try t.allocator.create(std.http.Server);
-	server.* = std.http.Server.init(t.allocator, .{.reuse_address = true});
+	server.* = std.http.Server.init(.{.reuse_address = true});
 
 	const address = try std.net.Address.parseIp("127.0.0.1", 6370);
 	try server.listen(address);
