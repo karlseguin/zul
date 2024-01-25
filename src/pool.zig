@@ -123,6 +123,37 @@ test "pool: acquire and release" {
 	p.release(i1b);
 }
 
+test "pool: threadsafety" {
+	var p = try Growing(TestPoolItem, void).init(t.allocator, {}, .{.count = 3});
+	defer p.deinit();
+
+	// initialize this to 0 since we're asserting that it's 0
+	for (p._items) |item| {
+		item.data[0] = 0;
+	}
+
+	const t1 = try std.Thread.spawn(.{}, testPool, .{&p});
+	const t2 = try std.Thread.spawn(.{}, testPool, .{&p});
+	const t3 = try std.Thread.spawn(.{}, testPool, .{&p});
+
+	t1.join(); t2.join(); t3.join();
+}
+
+fn testPool(p: *Growing(TestPoolItem, void)) void {
+	const random = t.Random.random();
+
+	for (0..5000) |_| {
+		var sb = p.acquire() catch unreachable;
+		// no other thread should have set this to 255
+		std.debug.assert(sb.data[0] == 0);
+
+		sb.data[0] = 255;
+		std.time.sleep(random.uintAtMost(u32, 100000));
+		sb.data[0] = 0;
+		p.release(sb);
+	}
+}
+
 const TestPoolItem = struct {
 	data: []u8,
 	allocator: Allocator,
