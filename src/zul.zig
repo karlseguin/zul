@@ -7,6 +7,7 @@ pub const pool = @import("pool.zig");
 pub const testing = @import("testing.zig");
 pub const benchmark = @import("benchmark.zig");
 
+pub const ThreadPool = @import("thread_pool.zig").ThreadPool;
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
 
 const datetime = @import("datetime.zig");

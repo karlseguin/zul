@@ -12,7 +12,7 @@ title: zul.StringBuilder
 {% highlight zig %}
 // StringBuilder can be used to efficiently concatenate strings
 // But it can also be used to craft binary payloads.
-var sb = zul.StringBuilder.init(t.allocator);
+var sb = zul.StringBuilder.init(allocator);
 defer sb.deinit();
 
 // We're going to generate a 4-byte length-prefixed message.

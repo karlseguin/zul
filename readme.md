@@ -197,7 +197,7 @@ Efficiently create/concat strings or binary data, optionally using a thread-safe
 ```zig
 // StringBuilder can be used to efficiently concatenate strings
 // But it can also be used to craft binary payloads.
-var sb = zul.StringBuilder.init(t.allocator);
+var sb = zul.StringBuilder.init(allocator);
 defer sb.deinit();
 
 // We're going to generate a 4-byte length-prefixed message.
@@ -243,6 +243,23 @@ test "memcpy" {
 
 	// zul's expectEqual also works with strings.
 	try t.expectEqual("hello", buf);
+}
+```
+
+## [zul.ThreadPool](https://www.goblgobl.com/zul/thread_pool/)
+Lightweight thread pool with back-pressure and zero allocations after initialization.
+
+```zig
+var tp = try ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
+defer tp.deinit(allocator);
+
+// This will block if the threadpool has 500 pending jobs
+// where 500 is the configured backlog
+tp.spawn(.{1, true});
+
+
+fn someTask(i: i32, allow: bool) void {
+	// process
 }
 ```
 

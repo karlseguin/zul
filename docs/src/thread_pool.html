@@ -1,0 +1,66 @@
+---
+layout: site.njk
+title: zul.ThreadPool
+---
+
+<h1 id=zul.ThreadPool><a href=#zul.ThreadPool aria-hidden=true>zul.ThreadPool</a></h1>
+<p>Lightweight thread pool with back-pressure and zero allocations after initialization.</p>
+
+<p>The standard library's <code>std.Thread.Pool</code> is designed for large jobs. As such, each scheduled job has non-trivial overhead.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+var tp = try ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
+defer tp.deinit(allocator);
+
+// This will block if the threadpool has 500 pending jobs
+// where 500 is the configured backlog
+tp.spawn(.{1, true});
+
+
+fn someTask(i: i32, allow: bool) void {
+	// process
+}
+{% endhighlight %}
+
+<h2 id=ThreadPool><a href=#ThreadPool aria-hidden=true>ThreadPool(fn) struct</a></h2>
+<p><code>zul.ThreadPool(comptime Fn: type)</code> is a simple and memory efficient way to have pre-initialized threads ready to process incoming work. The ThreadPool is a generic and takes the function to execute as a parameter.</p>
+
+<h3 id=ThreadPool.methods><a href=#ThreadPool.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=ThreadPool.init><a href=#Growing.init aria-hidden=true>init(...) !*Self</a></code>
+{% highlight zig %}
+fn init(
+	// Allocator is used to create the thread pool, no allocations occur after `init` returns.
+	allocator: std.mem.Allocator,
+
+	opts: .{
+		// number of threads
+		.count: u32 = 1,
+
+		// The number of pending jobs to allow before callers are blocked.
+		// The library will allocate an array of this size to hold all pending
+		// parameters.
+		.backlog: u32 = 500,
+
+	}
+) !*ThreadPool(Fn)
+{% endhighlight %}
+		<div class=desc>
+			<p>Creates a <code>zul.ThreadPool(Fn)</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=ThreadPool.deinit><a href=#ThreadPool.deinit aria-hidden=true>deinit(self: *ThreadPool(Fn)) void</a></code>
+		<div class=desc>
+			<p>This is method thread-safe. The threads will be stopped and cleaned up</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=ThreadPool.spawn><a href=#ThreadPool.spawn aria-hidden=true>spawn(self: *ThreadPool(Fn), args: std.meta.ArgsTuple(@TypeOf(Fn))) !void</a></code>
+		<div class=desc>
+			<p>Enqueues the arguments to be processed by <code>Fn</code> in a worker thread. This call blocks if the number of pending jobs has reached its configured <code>backlog</code>.</p>
+		</div>
+	</div>
+</div>
