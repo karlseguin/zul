@@ -97,7 +97,6 @@ pub fn ThreadPool(comptime F: anytype) type {
 		}
 
 		fn worker(self: *Self) void {
-			std.time.sleep(std.time.ns_per_ms);
 			while (true) {
 				self.mutex.lock();
 				while (self.pending == 0) {
