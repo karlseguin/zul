@@ -13,10 +13,19 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 			return std.testing.expectEqualStrings(expected, actual);
 		} else if (comptime isStringArray(ptr.child)) {
 			return std.testing.expectEqualStrings(expected, actual);
+		} else if (ptr.child == []u8 or ptr.child == []const u8) {
+			return expectStrings(expected, actual);
 		},
 		else => {},
 	}
 	return std.testing.expectEqual(@as(@TypeOf(actual), expected), actual);
+}
+
+fn expectStrings(expected: []const []const u8, actual: anytype) !void {
+	try t.expectEqual(expected.len, actual.len);
+	for (expected, actual) |e, a| {
+		try std.testing.expectEqualStrings(e, a);
+	}
 }
 
 fn isStringArray(comptime T: type) bool {

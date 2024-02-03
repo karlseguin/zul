@@ -2,13 +2,14 @@ const std = @import("std");
 
 pub const fs = @import("fs.zig");
 pub const http = @import("http.zig");
-pub const uuid = @import("uuid.zig");
 pub const pool = @import("pool.zig");
 pub const testing = @import("testing.zig");
 pub const benchmark = @import("benchmark.zig");
 
+pub const UUID = @import("uuid.zig").UUID;
 pub const ThreadPool = @import("thread_pool.zig").ThreadPool;
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
+pub const CommandLineArgs = @import("command_line_args.zig").CommandLineArgs;
 
 const datetime = @import("datetime.zig");
 pub const Date = datetime.Date;
