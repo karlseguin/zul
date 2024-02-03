@@ -263,22 +263,22 @@ fn someTask(i: i32, allow: bool) void {
 }
 ```
 
-## [zul.uuid](https://www.goblgobl.com/zul/uuid/)
+## [zul.UUID](https://www.goblgobl.com/zul/uuid/)
 Parse and generate version 4 (random) UUIDs.
 
 ```zig
-// v4() returns a zul.uuid.UUID
-const uuid1 = zul.uuid.v4();
+// v4() returns a zul.UUID
+const uuid1 = zul.UUID.v4();
 
 // toHex() returns a [36]u8
 const hex = uuid1.toHex(.lower);
 
-// returns a zul.uuid.UUID (or an error)
-const uuid2 = try zul.uuid.parse("761e3a9d-4f92-4e0d-9d67-054425c2b5c3");
+// returns a zul.UUID (or an error)
+const uuid2 = try zul.UUID.parse("761e3a9d-4f92-4e0d-9d67-054425c2b5c3");
 std.debug.print("{any}\n", uuid1.eql(uuid2));
 
-// zul.uuid.UUID can be JSON serialized
-try std.json.stringify(.{.uuid = uuid1}, .{}, writer);
+// zul.UUID can be JSON serialized
+try std.json.stringify(.{.id = uuid1}, .{}, writer);
 ```
 
 

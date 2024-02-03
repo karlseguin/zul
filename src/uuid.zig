@@ -7,6 +7,47 @@ const Allocator = std.mem.Allocator;
 pub const UUID = struct {
 	bin: [16]u8,
 
+	pub fn v4() UUID {
+		var bin: [16]u8 = undefined;
+		crypto.random.bytes(&bin);
+		bin[6] = (bin[6] & 0x0f) | 0x40;
+		bin[8] = (bin[8] & 0x3f) | 0x80;
+		return .{.bin = bin};
+	}
+
+	pub fn random() UUID {
+		var bin: [16]u8 = undefined;
+		crypto.random.bytes(&bin);
+		return .{.bin = bin};
+	}
+
+	pub fn parse(hex: []const u8) !UUID {
+		var bin: [16]u8 = undefined;
+
+		if (hex.len != 36 or hex[8] != '-' or hex[13] != '-' or hex[18] != '-' or hex[23] != '-') {
+			return error.InvalidUUID;
+		}
+
+		inline for (encoded_pos, 0..) |i, j| {
+			const hi = hex_to_nibble[hex[i + 0]];
+			const lo = hex_to_nibble[hex[i + 1]];
+			if (hi == 0xff or lo == 0xff) {
+				return error.InvalidUUID;
+			}
+			bin[j] = hi << 4 | lo;
+		}
+		return .{.bin = bin};
+	}
+
+	pub fn binToHex(bin: []const u8, case: std.fmt.Case) ![36]u8 {
+		if (bin.len != 16) {
+			return error.InvalidUUID;
+		}
+		var hex: [36]u8 = undefined;
+		b2h(bin, &hex, case);
+		return hex;
+	}
+
 	pub fn eql(self: UUID, other: UUID) bool {
 		inline for(self.bin, other.bin) |a, b| {
 			if (a != b) return false;
@@ -14,7 +55,7 @@ pub const UUID = struct {
 		return true;
 	}
 
-	pub fn toHexAlloc(self: UUID, allocator: std.mem.Allocator, case: std.fmt.Case, ) ![]u8 {
+	pub fn toHexAlloc(self: UUID, allocator: std.mem.Allocator, case: std.fmt.Case) ![]u8 {
 		const hex = try allocator.alloc(u8, 36);
 		_ = self.toHexBuf(hex, case);
 		return hex;
@@ -28,19 +69,7 @@ pub const UUID = struct {
 
 	pub fn toHexBuf(self: UUID, hex: []u8, case: std.fmt.Case) []u8 {
 		std.debug.assert(hex.len >= 36);
-
-		const alphabet = if (case == .lower) "0123456789abcdef" else "0123456789ABCDEF";
-
-		hex[8] = '-';
-		hex[13] = '-';
-		hex[18] = '-';
-		hex[23] = '-';
-
-		const bin = self.bin;
-		inline for (encoded_pos, 0..) |i, j| {
-			hex[i + 0] = alphabet[bin[j] >> 4];
-			hex[i + 1] = alphabet[bin[j] & 0x0f];
-		}
+		b2h(&self.bin, hex, case);
 		return hex[0..36];
 	}
 
@@ -69,36 +98,18 @@ pub const UUID = struct {
 	}
 };
 
-pub fn v4() UUID {
-	var bin: [16]u8 = undefined;
-	crypto.random.bytes(&bin);
-	bin[6] = (bin[6] & 0x0f) | 0x40;
-	bin[8] = (bin[8] & 0x3f) | 0x80;
-	return .{.bin = bin};
-}
+fn b2h(bin: []const u8, hex: []u8, case: std.fmt.Case) void {
+		const alphabet = if (case == .lower) "0123456789abcdef" else "0123456789ABCDEF";
 
-pub fn random() UUID {
-	var bin: [16]u8 = undefined;
-	crypto.random.bytes(&bin);
-	return .{.bin = bin};
-}
+		hex[8] = '-';
+		hex[13] = '-';
+		hex[18] = '-';
+		hex[23] = '-';
 
-pub fn parse(hex: []const u8) !UUID {
-	var bin: [16]u8 = undefined;
-
-	if (hex.len != 36 or hex[8] != '-' or hex[13] != '-' or hex[18] != '-' or hex[23] != '-') {
-		return error.InvalidUUID;
-	}
-
-	inline for (encoded_pos, 0..) |i, j| {
-		const hi = hex_to_nibble[hex[i + 0]];
-		const lo = hex_to_nibble[hex[i + 1]];
-		if (hi == 0xff or lo == 0xff) {
-			return error.InvalidUUID;
+		inline for (encoded_pos, 0..) |i, j| {
+			hex[i + 0] = alphabet[bin[j] >> 4];
+			hex[i + 1] = alphabet[bin[j] & 0x0f];
 		}
-		bin[j] = hi << 4 | lo;
-	}
-	return .{.bin = bin};
 }
 
 const encoded_pos = [16]u8{ 0, 2, 4, 6, 9, 11, 14, 16, 19, 21, 24, 26, 28, 30, 32, 34 };
@@ -125,7 +136,7 @@ test "uuid: parse" {
 	};
 
 	for (lower_uuids) |hex| {
-		const uuid = try parse(hex);
+		const uuid = try UUID.parse(hex);
 		try t.expectEqual(hex, uuid.toHex(.lower));
 	}
 
@@ -139,7 +150,7 @@ test "uuid: parse" {
 	};
 
 	for (upper_uuids) |hex| {
-		const uuid = try parse(hex);
+		const uuid = try UUID.parse(hex);
 		try t.expectEqual(hex, uuid.toHex(.upper));
 	}
 }
@@ -153,7 +164,7 @@ test "uuid: parse invalid" {
 	};
 
 	for (uuids) |uuid| {
-		try t.expectError(error.InvalidUUID, parse(uuid));
+		try t.expectError(error.InvalidUUID, UUID.parse(uuid));
 	}
 }
 
@@ -164,7 +175,7 @@ test "uuid: v4" {
 	try seen.ensureTotalCapacity(100);
 
 	for (0..100) |_| {
-		const uuid = v4();
+		const uuid = UUID.v4();
 		try t.expectEqual(@as(usize, 16), uuid.bin.len);
 		try t.expectEqual(4, uuid.bin[6] >> 4);
 		try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
@@ -175,7 +186,7 @@ test "uuid: v4" {
 
 test "uuid: hex" {
 	for (0..20) |_| {
-		const uuid = random();
+		const uuid = UUID.random();
 		const upper = uuid.toHex(.upper);
 		const lower = uuid.toHex(.lower);
 
@@ -193,9 +204,16 @@ test "uuid: hex" {
 	}
 }
 
+test "uuid: binToHex" {
+	for (0..20) |_| {
+		const uuid = UUID.random();
+		try t.expectEqual(&(try UUID.binToHex(&uuid.bin, .lower)), uuid.toHex(.lower));
+	}
+}
+
 test "uuid: json" {
 	defer t.reset();
-	const uuid = try parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
+	const uuid = try UUID.parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
 	var out = std.ArrayList(u8).init(t.arena.allocator());
 
 	try std.json.stringify(.{
@@ -206,7 +224,7 @@ test "uuid: json" {
 }
 
 test "uuid: format" {
-	const uuid = try parse("d543E371-a33d-4e68-87ba-7c9e3470a3be");
+	const uuid = try UUID.parse("d543E371-a33d-4e68-87ba-7c9e3470a3be");
 
 	var buf: [50]u8 = undefined;
 
@@ -227,10 +245,10 @@ test "uuid: format" {
 }
 
 test "uuid: eql" {
-	const uuid1 = v4();
-	const uuid2 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
-	const uuid3 = try parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
-	const uuid4 = try parse("5cc75a16-8592-4de3-8215-89824a9c62c0");
+	const uuid1 = UUID.v4();
+	const uuid2 = try UUID.parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
+	const uuid3 = try UUID.parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
+	const uuid4 = try UUID.parse("5cc75a16-8592-4de3-8215-89824a9c62c0");
 
 	try t.expectEqual(false, uuid1.eql(uuid2));
 	try t.expectEqual(false, uuid2.eql(uuid1));
