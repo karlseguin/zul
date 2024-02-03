@@ -41,6 +41,24 @@ fn lastIndexOfScalar(_: Allocator, _: *std.time.Timer) !void {
 //   worst: 292ns  median: 125ns   stddev: 23.13ns
 ```
 
+## [zul.CommandLineArgs](https://www.goblgobl.com/zul/command_line_args/)
+A simple command line parser.
+
+```zig
+var args = try zul.CommandLineArgs.parse(allocator);
+defer args.deinit();
+
+if (args.contains("version")) {
+	//todo: print the version
+	os.exit(0);
+}
+
+// Values retrieved from args.get are valid until args.deinit()
+// is called. Dupe the value if needed.
+const host = args.get("host") orelse "127.0.0.1";
+...
+```
+
 ## [zul.DateTime](https://www.goblgobl.com/zul/datetime/)
 Simple (no leap seconds, UTC-only), DateTime, Date and Time types.
 
@@ -250,7 +268,7 @@ test "memcpy" {
 Lightweight thread pool with back-pressure and zero allocations after initialization.
 
 ```zig
-var tp = try ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
+var tp = try zul.ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
 defer tp.deinit(allocator);
 
 // This will block if the threadpool has 500 pending jobs

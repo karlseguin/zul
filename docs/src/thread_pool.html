@@ -10,7 +10,7 @@ title: zul.ThreadPool
 
 <h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
 {% highlight zig %}
-var tp = try ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
+var tp = try zul.ThreadPool(someTask).init(allocator, .{.count = 4, .backlog = 500});
 defer tp.deinit(allocator);
 
 // This will block if the threadpool has 500 pending jobs
@@ -29,7 +29,7 @@ fn someTask(i: i32, allow: bool) void {
 <h3 id=ThreadPool.methods><a href=#ThreadPool.methods aria-hidden=true>Methods</a></h3>
 <div>
 	<div class=member>
-		<code class=name id=ThreadPool.init><a href=#Growing.init aria-hidden=true>init(...) !*Self</a></code>
+		<code class=name id=ThreadPool.init><a href=#ThreadPool.init aria-hidden=true>init(...) !*Self</a></code>
 {% highlight zig %}
 fn init(
 	// Allocator is used to create the thread pool, no allocations occur after `init` returns.
@@ -54,7 +54,7 @@ fn init(
 	<div class=member>
 		<code class=name id=ThreadPool.deinit><a href=#ThreadPool.deinit aria-hidden=true>deinit(self: *ThreadPool(Fn)) void</a></code>
 		<div class=desc>
-			<p>This is method thread-safe. The threads will be stopped and cleaned up</p>
+			<p>This is method thread-safe. The threads will be stopped and cleaned up.</p>
 		</div>
 	</div>
 	<div class=member>

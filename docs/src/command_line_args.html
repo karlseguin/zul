@@ -1,0 +1,101 @@
+---
+layout: site.njk
+title: zul.CommandLineArgs
+---
+
+<h1 id=zul.CommandLineArgs><a href=#zul.CommandLineArgs aria-hidden=true>zul.CommandLineArgs</a></h1>
+<p>A simple command line parser.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+var args = try zul.CommandLineArgs.parse(allocator);
+defer args.deinit();
+
+if (args.contains("version")) {
+	//todo: print the version
+	os.exit(0);
+}
+
+// Values retrieved from args.get are valid until args.deinit()
+// is called. Dupe the value if needed.
+const host = args.get("host") orelse "127.0.0.1";
+...
+{% endhighlight %}
+
+<h2 id=CommandLineArgs><a href=#CommandLineArgs aria-hidden=true>CommandLineArgs struct</a></h2>
+<p><code>zul.CommandLineArgs</code> is a thin wrapper around <code>std.process.argsWithAllocator</code> which applies simple logic to parse key=value pairs into a <code>StringHashMap([]const u8</code>.</p>
+
+<p>6 argument types are supported:</p>
+
+<ol>
+	<li><code>--key value</code>
+	<li><code>-k value</code>
+	<li><code>--key=value</code>
+	<li><code>-k=value</code>
+	<li><code>--key</code>
+	<li><code>-k</code>
+</ol>
+
+<p>A key without a value, such as <code>./run --version</code> or <code>./run -v</code> will be given a empty string value (<code>""</code>).</p>
+
+<p>Parsing is simple. Keys begin with one or two dashes. If the parser sees <code>./run --key1 --key2 value2</code>, it will load "key1" with a value of "", and "key2" with a value of "value2".</p>
+
+<p>Single-dash keys must only be 1 character. A single dash key with more than 1 character is ignored (i don't love this decision).</p>
+
+<p>One the parser runs into a non key+value combo, all following arguments are treated as a "tail", which is a list of <code>[]const u8</code></p>
+
+<h3 id=CommandLineArgs.fields><a href=#CommandLineArgs.fields aria-hidden=true>Fields</a></h3>
+<div>
+	<div class=member>
+		<code class=name>exe: []const u8</code>
+		<div class=desc>
+			<p>The first command line argument is the path to the running executable.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>tail: [][]const u8</code>
+		<div class=desc>
+			<p>A list of arguments starting from the first non key+value pair.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name>list: [][]const u8</code>
+		<div class=desc>
+			<p>A list of arguments. The first argument in the list is the path to the running executable. This is an exact collection of iterating through the result of <code>std.process.argsWithAllocator</code>.</p>
+		</div>
+	</div>
+</div>
+
+<h3 id=CommandLineArgs.methods><a href=#CommandLineArgs.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=CommandLineArgs.parse><a href=#CommandLineArgs.parse aria-hidden=true>parse(allocator: std.mem.Allocator) !CommandLineArgs</a></code>
+		<div class=desc>
+			<p>Parses the command line arguments This can only fail in exceptional cases. Can only fail in exceptional cases (e.g. out of memory).</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=CommandLineArgs.deinit><a href=#CommandLineArgs.deinit aria-hidden=true>deinit(self: CommandLineArgs) void</a></code>
+		<div class=desc>
+			<p>Releases all memory related to the parsing. This includes any string returned by <code>get</code> or in the <code>list</code> or <code>tail</code> slice.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=CommandLineArgs.get><a href=#CommandLineArgs.get aria-hidden=true>get(self: *const CommandLineArgs, key: []const u8) ?[]const</a></code>
+		<div class=desc>
+			<p>Gets the value associated with the key. The returned value's lifetime is tied to the CommandLineArg.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=CommandLineArgs.contains><a href=#CommandLineArgs.contains aria-hidden=true>contains(self: *const CommandLineArgs, key: []const u8) bool</a></code>
+		<div class=desc>
+			<p>Whether or not the key was present.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=CommandLineArgs.count><a href=#CommandLineArgs.count aria-hidden=true>contains(self: *const CommandLineArgs) u32</a></code>
+		<div class=desc>
+			<p>The number of key value pairs. <code>args.count() + args.tail.len + 1 == args.list.len</code>. The <code>+ 1</code> is for the path to the running executable which is included in <code>list</code>.</p>
+		</div>
+	</div>
+</div>

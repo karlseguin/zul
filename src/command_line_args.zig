@@ -88,15 +88,15 @@ pub const CommandLineArgs = struct {
 		allocator.destroy(arena);
 	}
 
-	pub fn contains(self: *CommandLineArgs, name: []const u8) bool {
+	pub fn contains(self: *const CommandLineArgs, name: []const u8) bool {
 		return self._lookup.contains(name);
 	}
 
-	pub fn get(self: *CommandLineArgs, name: []const u8) ?[]const u8 {
+	pub fn get(self: *const CommandLineArgs, name: []const u8) ?[]const u8 {
 		return self._lookup.get(name);
 	}
 
-	pub fn count(self: *CommandLineArgs) u32 {
+	pub fn count(self: *const CommandLineArgs) u32 {
 		return self._lookup.count();
 	}
 };
