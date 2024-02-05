@@ -4,7 +4,7 @@ title: zul.UUID
 ---
 
 <h1 id=zul.UUID><a href=#zul.UUID aria-hidden=true>zul.UUID</a></h1>
-<p>Parse and generate version 4 (random) UUIDs.</p>
+<p>Parse and generate version 4 and version 7 UUIDs.</p>
 
 <h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
 {% highlight zig %}
@@ -18,13 +18,15 @@ const hex = uuid1.toHex(.lower);
 const uuid2 = try zul.UUID.parse("761e3a9d-4f92-4e0d-9d67-054425c2b5c3");
 std.debug.print("{any}\n", uuid1.eql(uuid2));
 
+// create a UUIDv7
+const uuid3 = zul.UUID.v7();
+
 // zul.UUID can be JSON serialized
-try std.json.stringify(.{.id = uuid1}, .{}, writer);
+try std.json.stringify(.{.id = uuid3}, .{}, writer);
 {% endhighlight %}
 
-
 <h2 id=UUID><a href=#UUID aria-hidden=true>UUID struct</a></h2>
-<p><code>zul.uuid.UUID</code> is a thin wrapper around a <code>[16]u8</code>. Its main purpose is to generate a hex-encoded version of the UUID.</p>
+<p><code>zul.UUID</code> is a thin wrapper around a <code>[16]u8</code>. Its main purpose is to generate a hex-encoded version of the UUID.</p>
 
 <h3 id=UUID.fields><a href=#UUID.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -36,16 +38,20 @@ try std.json.stringify(.{.id = uuid1}, .{}, writer);
 	</div>
 </div>
 
-<h3 id=UUID.methods><a href=#UUID.methods aria-hidden=true>Methods</a></h3>
+<h3 id=UUID.functions><a href=#UUID.functions aria-hidden=true>Functions</a></h3>
 <div>
 	<div class=member>
 		<code class=name id=v4>UUID.v4() UUID</code>
 		<div class=desc><p>Generate a version 4 (random) UUID.</p></div>
 	</div>
 	<div class=member>
+		<code class=name id=v4>UUID.v7() UUID</code>
+		<div class=desc><p>Generate a version 7 UUID.</p></div>
+	</div>
+	<div class=member>
 		<code class=name id=random>UUID.random() UUID</code>
 		<div class=desc>
-			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>UUID.v4()</a> unless you have specific reasons not to.</div>
+			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>UUID.v4()</a> or <a href=#v7>UUID.v7()</a> unless you have specific reasons not to.</div>
 		</div>
 	</div>
 	<div class=member>
@@ -60,6 +66,7 @@ try std.json.stringify(.{.id = uuid1}, .{}, writer);
 			<p>Hex encodes a 16 byte binary UUID.</div>
 		</div>
 	</div>
+<h3 id=UUID.methods><a href=#UUID.methods aria-hidden=true>Methods</a></h3>
 	<div class=member>
 		<code class=name id=UUID.toHex><a href=#UUID.toHex aria-hidden=true>toHex(uuid: UUID, case: Case) [36]u8</a></code>
 		<div class=desc>

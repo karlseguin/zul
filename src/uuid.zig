@@ -4,14 +4,53 @@ const fmt = std.fmt;
 const crypto = std.crypto;
 const Allocator = std.mem.Allocator;
 
+var clock_sequence: u16 = 0;
+var last_timestamp: u64 =  0;
+
 pub const UUID = struct {
 	bin: [16]u8,
+
+	pub fn seed() void {
+		var b: [2]u8 = undefined;
+		crypto.random.bytes(&b);
+		@atomicStore(u16, *clock_sequence, std.mem.readInt(u16, &b, .big), .Monotonic);
+	}
 
 	pub fn v4() UUID {
 		var bin: [16]u8 = undefined;
 		crypto.random.bytes(&bin);
 		bin[6] = (bin[6] & 0x0f) | 0x40;
 		bin[8] = (bin[8] & 0x3f) | 0x80;
+		return .{.bin = bin};
+	}
+
+	pub fn v7() UUID {
+		const ts: u64 = @intCast(std.time.milliTimestamp());
+		const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .Monotonic);
+		const sequence = if (ts <= last)
+			@atomicRmw(u16, &clock_sequence, .Add, 1, .Monotonic) + 1
+		else
+			@atomicLoad(u16, &clock_sequence, .Monotonic);
+
+		var bin: [16]u8 = undefined;
+		const ts_buf = std.mem.asBytes(&ts);
+		bin[0] = ts_buf[5];
+		bin[1] = ts_buf[4];
+		bin[2] = ts_buf[3];
+		bin[3] = ts_buf[2];
+		bin[4] = ts_buf[1];
+		bin[5] = ts_buf[0];
+
+		const seq_buf = std.mem.asBytes(&sequence);
+		// sequence + version
+		bin[6] = (seq_buf[1]  & 0x0f) | 0x70;
+		bin[7] = seq_buf[0];
+
+		crypto.random.bytes(bin[8..]);
+
+		//variant
+		bin[8] = (bin[8] & 0x3f) | 0x80;
+
 		return .{.bin = bin};
 	}
 
@@ -180,6 +219,28 @@ test "uuid: v4" {
 		try t.expectEqual(4, uuid.bin[6] >> 4);
 		try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
 		seen.putAssumeCapacity(try uuid.toHexAlloc(allocator, .lower), {});
+	}
+	try t.expectEqual(100, seen.count());
+}
+
+test "uuid: v7" {
+	defer t.reset();
+	const allocator = t.arena.allocator();
+	var seen = std.StringHashMap(void).init(allocator);
+	try seen.ensureTotalCapacity(100);
+
+
+	var last: u64 = 0;
+	for (0..100) |_| {
+		const uuid = UUID.v7();
+		try t.expectEqual(@as(usize, 16), uuid.bin.len);
+		try t.expectEqual(7, uuid.bin[6] >> 4);
+		try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
+		seen.putAssumeCapacity(try uuid.toHexAlloc(allocator, .lower), {});
+
+		const ts = std.mem.readInt(u64, uuid.bin[0..8], .big);
+		try t.expectEqual(true, ts > last);
+		last = ts;
 	}
 	try t.expectEqual(100, seen.count());
 }
