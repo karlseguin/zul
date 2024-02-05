@@ -25,7 +25,7 @@ const host = args.get("host") orelse "127.0.0.1";
 <h2 id=CommandLineArgs><a href=#CommandLineArgs aria-hidden=true>CommandLineArgs struct</a></h2>
 <p><code>zul.CommandLineArgs</code> is a thin wrapper around <code>std.process.argsWithAllocator</code> which applies simple logic to parse key=value pairs into a <code>StringHashMap([]const u8</code>.</p>
 
-<p>6 argument types are supported:</p>
+<p>7 argument types are supported:</p>
 
 <ol>
 	<li><code>--key value</code>
@@ -34,13 +34,14 @@ const host = args.get("host") orelse "127.0.0.1";
 	<li><code>-k=value</code>
 	<li><code>--key</code>
 	<li><code>-k</code>
+	<li><code>-xvf value</code>
 </ol>
 
 <p>A key without a value, such as <code>./run --version</code> or <code>./run -v</code> will be given a empty string value (<code>""</code>).</p>
 
 <p>Parsing is simple. Keys begin with one or two dashes. If the parser sees <code>./run --key1 --key2 value2</code>, it will load "key1" with a value of "", and "key2" with a value of "value2".</p>
 
-<p>Single-dash keys must only be 1 character. A single dash key with more than 1 character is ignored (i don't love this decision).</p>
+<p>Single-dash keys can be grouped together, with the last key being given the value, so parameters like <code>./run -xvf file.tar.gz</code> work like you (probably) expect.</p>
 
 <p>One the parser runs into a non key+value combo, all following arguments are treated as a "tail", which is a list of <code>[]const u8</code></p>
 

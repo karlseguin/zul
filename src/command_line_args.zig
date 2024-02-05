@@ -64,9 +64,14 @@ pub const CommandLineArgs = struct {
 				try lookup.put(kv.key, kv.value);
 			} else {
 				const kv = KeyValue.from(arg[1..], items, &i);
-				if (kv.key.len == 1) {
-					try lookup.put(kv.key, kv.value);
+				const key = kv.key;
+
+				// -xvf file.tar.gz
+				// parses into x=>"", v=>"", f=>"file.tar.gz"
+				for (0..key.len - 1) |j| {
+					try lookup.put(key[j..j+1], "");
 				}
+				try lookup.put(key[key.len-1..], kv.value);
 			}
 			tail_start = i;
 		}
@@ -181,6 +186,39 @@ test "CommandLineArgs: simple args" {
 
 	try t.expectEqual(true, args.contains("x"));
 	try t.expectEqual("", args.get("x").?);
+}
+
+test "CommandLineArgs: single character flags" {
+	const input = [_][]const u8{"9001", "-a", "-bc", "-def", "-ghij", "data"};
+	var args = testParse(&input);
+	defer args.deinit();
+
+	try t.expectEqual("9001", args.exe);
+	try t.expectEqual(0, args.tail.len);
+	try t.expectEqual(&input, args.list);
+
+	try t.expectEqual(10, args.count());
+	try t.expectEqual(true, args.contains("a"));
+	try t.expectEqual("", args.get("a").?);
+	try t.expectEqual(true, args.contains("b"));
+	try t.expectEqual("", args.get("b").?);
+	try t.expectEqual(true, args.contains("c"));
+	try t.expectEqual("", args.get("c").?);
+	try t.expectEqual(true, args.contains("d"));
+	try t.expectEqual("", args.get("d").?);
+	try t.expectEqual(true, args.contains("e"));
+	try t.expectEqual("", args.get("e").?);
+	try t.expectEqual(true, args.contains("f"));
+	try t.expectEqual("", args.get("f").?);
+	try t.expectEqual(true, args.contains("g"));
+	try t.expectEqual("", args.get("g").?);
+	try t.expectEqual(true, args.contains("h"));
+	try t.expectEqual("", args.get("h").?);
+	try t.expectEqual(true, args.contains("i"));
+	try t.expectEqual("", args.get("i").?);
+
+	try t.expectEqual(true, args.contains("j"));
+	try t.expectEqual("data", args.get("j").?);
 }
 
 test "CommandLineArgs: simple args with =" {
