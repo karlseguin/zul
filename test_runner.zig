@@ -6,8 +6,8 @@ const BORDER = "=" ** 80;
 // Our zul.http.Client tests don't use TLS..and just _compiling_ TLS adds overhead
 // so during our tests, we disable it.
 // See: https://github.com/ziglang/zig/issues/17051
-pub const std_options = struct{
-	pub const http_disable_tls = true;
+pub const std_options = .{
+	.http_disable_tls = true,
 };
 
 pub fn main() !void {
