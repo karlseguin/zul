@@ -10,6 +10,7 @@ pub const StringBuilder = struct {
 	buf: []u8,
 	pos: usize,
 	static: []u8,
+	pool: ?*string_builder.Pool = null,
 	endian: Endian = builtin.cpu.arch.endian(),
 	allocator: Allocator,
 
@@ -20,6 +21,7 @@ pub const StringBuilder = struct {
 	pub fn init(allocator: Allocator) StringBuilder {
 		return .{
 			.pos = 0,
+			.pool = null,
 			.buf = &[_]u8{},
 			.static = &[_]u8{},
 			.allocator = allocator,
@@ -30,10 +32,11 @@ pub const StringBuilder = struct {
 	// pool.acquire(). The idea is that this buffer will get re-used so it has
 	// a static buffer that will get used, and we'll only need to dynamically
 	// allocate memory beyond static if we try to write more than static.len.
-	fn initForPool(allocator: Allocator, static_size: usize) !StringBuilder {
+	fn initForPool(allocator: Allocator, pool: *string_builder.Pool, static_size: usize) !StringBuilder {
 		const static = try allocator.alloc(u8, static_size);
 		return .{
 			.pos = 0,
+			.pool = pool,
 			.buf = static,
 			.static = static,
 			.allocator = allocator,
@@ -44,6 +47,7 @@ pub const StringBuilder = struct {
 	pub fn fromOwnedSlice(allocator: Allocator, buf: []u8) StringBuilder {
 		return .{
 			.buf = buf,
+			.pool = null,
 			.pos = buf.len,
 			.static = &[_]u8{},
 			.allocator = allocator,
@@ -94,8 +98,14 @@ pub const StringBuilder = struct {
 		return sb;
 	}
 
-	pub fn deinit(self: StringBuilder) void {
+	pub fn deinit(self: *const StringBuilder) void {
 		self.allocator.free(self.buf);
+	}
+
+	// it's a mistake to call release if this string builder isn't from a pool
+	pub fn release(self: *StringBuilder) void {
+		const p = self.pool orelse unreachable;
+		p.release(self);
 	}
 
 	pub fn clearRetainingCapacity(self: *StringBuilder) void {
@@ -473,9 +483,20 @@ pub const Pool = struct {
 	static_size: usize,
 	builders: []*StringBuilder,
 
-	pub fn init(allocator: Allocator, pool_size: u16, static_size: usize) !Pool {
+	pub fn init(allocator: Allocator, pool_size: u16, static_size: usize) !*Pool {
 		const builders = try allocator.alloc(*StringBuilder, pool_size);
 		errdefer allocator.free(builders);
+
+		const pool = try allocator.create(Pool);
+		errdefer allocator.destroy(pool);
+
+		pool.* = .{
+			.mutex = .{},
+			.builders = builders,
+			.allocator = allocator,
+			.available = pool_size,
+			.static_size = static_size
+		};
 
 		var allocated: usize = 0;
 		errdefer {
@@ -489,18 +510,12 @@ pub const Pool = struct {
 		for (0..pool_size) |i| {
 			const sb = try allocator.create(StringBuilder);
 			errdefer allocator.destroy(sb);
-			sb.* = try StringBuilder.initForPool(allocator, static_size);
+			sb.* = try StringBuilder.initForPool(allocator, pool, static_size);
 			builders[i] = sb;
 			allocated += 1;
 		}
 
-		return .{
-			.mutex = .{},
-			.builders = builders,
-			.allocator = allocator,
-			.available = pool_size,
-			.static_size = static_size
-		};
+		return pool;
 	}
 
 	pub fn deinit(self: *Pool) void {
@@ -510,6 +525,7 @@ pub const Pool = struct {
 			allocator.destroy(sb);
 		}
 		allocator.free(self.builders);
+		allocator.destroy(self);
 	}
 
 	pub fn acquire(self: *Pool) !*StringBuilder {
@@ -532,6 +548,10 @@ pub const Pool = struct {
 			// result in an unexpected large allocation, the exact opposite of what
 			// we're after.
 			sb.* = StringBuilder.init(allocator);
+			// even though we wont' release this back to the pool, we still want
+			// sb.release() to be callable. sb.release() will call pool.release()
+			// which will know what to do with this non-pooled StringBuilder.
+			sb.pool = self;
 			return sb;
 		}
 		const index = available - 1;
@@ -994,14 +1014,14 @@ test "StringBuilder.Pool: acquire and release" {
 	try t.expectEqual(false, sb1a == sb2a);
 	try t.expectEqual(false, sb2a == sb3a);
 
-	p.release(sb1a);
+	sb1a.release();
 
 	const sb1b = p.acquire() catch unreachable;
 	try t.expectEqual(true, sb1a == sb1b);
 
-	p.release(sb3a);
-	p.release(sb2a);
-	p.release(sb1b);
+	sb3a.release();
+	sb2a.release();
+	sb1b.release();
 }
 
 test "StringBuilder.Pool: threadsafety" {
@@ -1013,9 +1033,9 @@ test "StringBuilder.Pool: threadsafety" {
 		sb.static[0] = 0;
 	}
 
-	const t1 = try std.Thread.spawn(.{}, testPool, .{&p, 1});
-	const t2 = try std.Thread.spawn(.{}, testPool, .{&p, 2});
-	const t3 = try std.Thread.spawn(.{}, testPool, .{&p, 3});
+	const t1 = try std.Thread.spawn(.{}, testPool, .{p, 1});
+	const t2 = try std.Thread.spawn(.{}, testPool, .{p, 2});
+	const t3 = try std.Thread.spawn(.{}, testPool, .{p, 3});
 
 	t1.join(); t2.join(); t3.join();
 }
