@@ -119,9 +119,9 @@ pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, o
 pub fn readDir(dir_path: []const u8) !Iterator {
 	const dir = blk: {
 		if (std.fs.path.isAbsolute(dir_path)) {
-			break :blk try std.fs.openDirAbsolute(dir_path, .{});
+			break :blk try std.fs.openDirAbsolute(dir_path, .{.iterate = true});
 		} else {
-			break :blk try std.fs.cwd().openDir(dir_path, .{});
+			break :blk try std.fs.cwd().openDir(dir_path, .{.iterate = true});
 		}
 	};
 
