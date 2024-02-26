@@ -34,8 +34,8 @@ pub const Request = struct {
 	_req: ?std.http.Client.Request = null,
 
 	url: StringBuilder,
-	headers: std.http.Headers,
 	method: std.http.Method = .GET,
+	headers: std.ArrayList(std.http.Header),
 
 	const Body = union(enum) {
 		none: void,
@@ -70,7 +70,7 @@ pub const Request = struct {
 			._client = client,
 			._arena = arena,
 			.url = url_builder,
-			.headers = std.http.Headers.init(aa),
+			.headers = std.ArrayList(std.http.Header).init(aa),
 		};
 	}
 
@@ -86,7 +86,7 @@ pub const Request = struct {
 	}
 
 	pub fn header(self: *Request, name: []const u8, value: []const u8) !void {
-		try self.headers.append(name, value);
+		try self.headers.append(.{.name = name, .value = value});
 	}
 
 	pub fn query(self: *Request, name: []const u8, value: []const u8) !void {
@@ -108,9 +108,10 @@ pub const Request = struct {
 	}
 
 	pub const Opts = struct{
+		response_headers: bool = true,
 	};
 
-	pub fn getResponse(self: *Request, _: Opts) !Response {
+	pub fn getResponse(self: *Request, opts: Opts) !Response {
 		const have_body = std.meta.activeTag(self._body) != .none;
 
 		// this is currently handled poorly by std.Client, so
@@ -128,8 +129,12 @@ pub const Request = struct {
 			break :blk try std.Uri.parse(url);
 		};
 
-		self._req = try self._client.open(self.method, uri, self.headers, .{
-			.handle_redirects = !have_body
+		var server_header_buffer: [8 * 1024]u8 = undefined;
+
+		self._req = try self._client.open(self.method, uri, .{
+			.extra_headers = self.headers.items,
+			.redirect_behavior = if (have_body) .not_allowed else @enumFromInt(5),
+			.server_header_buffer = &server_header_buffer,
 		});
 		var req = &self._req.?;
 
@@ -166,9 +171,18 @@ pub const Request = struct {
 		try req.wait();
 
 		const res = &req.response;
+		var headers = std.StringHashMap([]const u8).init(self._arena.allocator());
+		if (opts.response_headers == true) {
+			var it = res.iterateHeaders();
+			while (it.next()) |hdr| {
+				try headers.put(hdr.name, hdr.value);
+			}
+		}
+
 		return .{
 			.req = req,
 			.res = res,
+			.headers = headers,
 			.status = @intFromEnum(res.status),
 		};
 	}
@@ -178,15 +192,13 @@ pub const Response = struct {
 	status: u16,
 	req: *std.http.Client.Request,
 	res: *std.http.Client.Response,
+	headers: std.StringHashMap([]const u8),
 
-	pub fn header(self: Response, name: []const u8) ?[]const u8 {
-		if (self.res.headers.getFirstEntry(name)) |field| {
-			return field.value;
-		}
-		return null;
+	pub fn header(self: *const Response, name: []const u8) ?[]const u8 {
+		return self.headers.get(name);
 	}
 
-	pub fn json(self: Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
+	pub fn json(self: *const Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
 		// No point using a BufferedReader since the JSON reader does its own buffering
 		var reader = std.json.reader(allocator, self.req.reader());
 		defer reader.deinit();
@@ -199,7 +211,7 @@ pub const Response = struct {
 		return zul.Managed(T).fromJson(parsed);
 	}
 
-	pub fn allocBody(self: Response, allocator: Allocator, opts: zul.StringBuilder.FromReaderOpts) !zul.StringBuilder {
+	pub fn allocBody(self: *const Response, allocator: Allocator, opts: zul.StringBuilder.FromReaderOpts) !zul.StringBuilder {
 		const str_cl = self.header("Content-Length") orelse {
 			return zul.StringBuilder.fromReader(allocator, self.req.reader(), opts);
 		};
@@ -240,7 +252,7 @@ test "http.Request: headers" {
 	try req.header("R_1", "A Value");
 	try req.header("x-request-header", "value;2");
 
-	const res = try req.getResponse(.{});
+	var res = try req.getResponse(.{});
 	try t.expectEqual(200, res.status);
 	const m = try res.json(TestEcho, t.allocator, .{});
 	defer m.deinit();
@@ -267,7 +279,7 @@ test "http.Request: querystring" {
 		var req = try client.request("http://127.0.0.1:6370/echo?query key=query value");
 		defer req.deinit();
 
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
 		try t.expectEqual("/echo?query%20key=query%20value", m.value.url);
@@ -279,7 +291,7 @@ test "http.Request: querystring" {
 		try req.query("search term", "peanut butter");
 		try req.query("limit", "10");
 
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
 		try t.expectEqual("/echo?search%20term=peanut%20butter&limit=10", m.value.url);
@@ -309,8 +321,8 @@ test "http.Request: body" {
 		defer req.deinit();
 		req.body("hello world!");
 
-		const res = try req.getResponse(.{});
-		try t.expectEqual("12", res.header("REQ-Content-Length").?);
+		var res = try req.getResponse(.{});
+		try t.expectEqual("12", res.header("REQ-content-length").?);
 
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
@@ -324,10 +336,10 @@ test "http.Request: body" {
 		defer req.deinit();
 		req.streamFile(file_path);
 
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
-		try t.expectEqual("41", res.header("REQ-Content-Length").?);
+		try t.expectEqual("41", res.header("REQ-content-length").?);
 		try t.expectEqual("a file for testing recursive fs iterator\n", m.value.body);
 	}
 }
@@ -346,7 +358,7 @@ test "http.Response: body" {
 		// too big with no content-length
 		var req = try client.request("http://127.0.0.1:6370/echo");
 		defer req.deinit();
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		try t.expectEqual(error.TooBig, res.allocBody(t.allocator, .{.max_size = 30}));
 	}
 
@@ -355,7 +367,7 @@ test "http.Response: body" {
 		var req = try client.request("http://127.0.0.1:6370/echo");
 		defer req.deinit();
 
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		const sb = try res.allocBody(t.allocator, .{});
 		defer sb.deinit();
 		try t.expectEqual("{\"url\":\"/echo\",\"method\":\"GET\",\"body\":\"\"}", sb.string());
@@ -365,7 +377,7 @@ test "http.Response: body" {
 		// too big with content-length
 		var req = try client.request("http://127.0.0.1:6370/hello");
 		defer req.deinit();
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		try t.expectEqual(error.TooBig, res.allocBody(t.allocator, .{.max_size = 4}));
 	}
 
@@ -374,7 +386,7 @@ test "http.Response: body" {
 		var req = try client.request("http://127.0.0.1:6370/hello");
 		defer req.deinit();
 
-		const res = try req.getResponse(.{});
+		var res = try req.getResponse(.{});
 		const sb = try res.allocBody(t.allocator, .{});
 		defer sb.deinit();
 		try t.expectEqual("hello", sb.string());
@@ -388,66 +400,62 @@ const TestEcho = struct {
 };
 
 fn startTestServer() !std.Thread {
-	var server = try t.allocator.create(std.http.Server);
-	server.* = std.http.Server.init(.{.reuse_address = true});
-
-	const address = try std.net.Address.parseIp("127.0.0.1", 6370);
-	try server.listen(address);
-
 	return std.Thread.spawn(.{}, (struct {
-		fn apply(s: *std.http.Server) !void {
+		fn apply() !void {
+			const allocator = t.arena.allocator();
+			const address = try std.net.Address.parseIp("127.0.0.1", 6370);
+			var listener = try address.listen(.{. reuse_address = true });
+
 			defer {
-				s.deinit();
-				t.allocator.destroy(s);
+				listener.deinit();
 			}
+
+			var req_buf: [1024]u8 = undefined;
+
 			while (true) {
-				var res = try s.accept(.{.allocator = t.allocator});
+				var conn = try listener.accept();
+				defer conn.stream.close();
 
-				defer res.deinit();
-				defer _ = res.reset();
-				try res.wait();
+				var server = std.http.Server.init(conn, &req_buf);
+				var req = try server.receiveHead();
 
-				var body: [1024]u8 = undefined;
-				const body_size = try res.readAll(&body);
 
-				try res.headers.append("connection", "close");
-				if (std.mem.eql(u8, "/stop", res.request.target) == true) {
-					// non-echo, stop the server
-					try res.send();
-					try res.finish();
+				if (std.mem.eql(u8, "/stop", req.head.target) == true) {
+					try req.respond("", .{});
 					break;
 				}
 
-				if (std.mem.eql(u8, "/hello", res.request.target) == true) {
-					res.transfer_encoding = .{.content_length = 5};
-					try res.send();
-					try res.writeAll("hello");
-					try res.finish();
+				if (std.mem.eql(u8, "/hello", req.head.target) == true) {
+					try req.respond("hello", .{.keep_alive = false});
 					continue;
 				}
 
-				res.transfer_encoding = .{.chunked = {}};
+				var header_count: usize = 0;
+				var headers: [10]std.http.Header = undefined;
 
-				const req = res.request;
-				const aa = t.arena.allocator();
-				for (req.headers.list.items) |field| {
-					const name = try aa.alloc(u8, field.name.len + 4);
+				var it = req.iterateHeaders();
+				while (it.next()) |hdr| {
+					const name = try allocator.alloc(u8, hdr.name.len + 4);
 					@memcpy(name[0..4], "REQ-");
-					@memcpy(name[4..], field.name);
-					try res.headers.append(name, field.value);
+					@memcpy(name[4..], hdr.name);
+					headers[header_count] = .{ .name = name, .value = hdr.value};
+					header_count += 1;
 				}
-				try res.send();
 
-				try std.json.stringify(.{
-					.url = req.target,
-					.method = req.method,
-					.body = body[0..body_size],
-				}, .{}, res.writer());
+				const req_body = try (try req.reader()).readAllAlloc(allocator, 4096);
+				const res = try std.json.stringifyAlloc(allocator, .{
+					.url = req.head.target,
+					.method = req.head.method,
+					.body = req_body,
+				}, .{});
 
-				try res.finish();
+				try req.respond(res, .{
+					.keep_alive = false,
+					.extra_headers = headers[0..header_count],
+				});
 			}
 		}
-	}).apply, .{server});
+	}).apply, .{});
 }
 
 fn shutdownTestServer(client: *Client, server_thread: std.Thread) void {
