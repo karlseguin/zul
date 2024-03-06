@@ -88,11 +88,10 @@ pub const Date = struct {
 	}
 
 	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !Date {
-		_ = allocator;
 		_ = options;
 
-		switch (try source.next()) {
-			.string => |str| return Date.parse(str, .iso8601) catch return error.InvalidCharacter,
+		switch (try source.nextAlloc(allocator, .alloc_if_needed)) {
+			inline .string, .allocated_string => |str| return Date.parse(str, .iso8601) catch return error.InvalidCharacter,
 			else => return error.UnexpectedToken,
 		}
 	}
@@ -184,11 +183,10 @@ pub const Time = struct {
 	}
 
 	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !Time {
-		_ = allocator;
 		_ = options;
 
-		switch (try source.next()) {
-			.string => |str| return Time.parse(str, .rfc3339) catch return error.InvalidCharacter,
+		switch (try source.nextAlloc(allocator, .alloc_if_needed)) {
+			inline .string, .allocated_string => |str| return Time.parse(str, .rfc3339) catch return error.InvalidCharacter,
 			else => return error.UnexpectedToken,
 		}
 	}
@@ -433,11 +431,10 @@ pub const DateTime = struct {
 	}
 
 	pub fn jsonParse(allocator: Allocator, source: anytype, options: anytype) !DateTime {
-		_ = allocator;
 		_ = options;
 
-		switch (try source.next()) {
-			.string => |str| return parseRFC3339(str) catch return error.InvalidCharacter,
+		switch (try source.nextAlloc(allocator, .alloc_if_needed)) {
+			inline .string, .allocated_string => |str| return parseRFC3339(str) catch return error.InvalidCharacter,
 			else => return error.UnexpectedToken,
 		}
 	}
@@ -621,19 +618,23 @@ const Parser = struct {
 
 	fn iso8601Date(self: *Parser) !Date {
 		const len = self.unconsumed();
-		if (len < 10) {
+		if (len < 8) {
 			return error.InvalidDate;
 		}
 
 		const negative = self.consumeIf('-');
 		const year = self.paddedInt(i16, 4) orelse return error.InvalidDate;
 
-		if (self.consumeIf('-') == false) {
-			return error.InvalidDate;
+		var with_dashes = false;
+		if (self.consumeIf('-')) {
+			if (len < 10) {
+				return error.InvalidDate;
+			}
+			with_dashes = true;
 		}
 
 		const month = self.paddedInt(u8, 2) orelse return error.InvalidDate;
-		if (self.consumeIf('-') == false) {
+		if (self.consumeIf('-') == !with_dashes) {
 			return error.InvalidDate;
 		}
 
@@ -692,9 +693,16 @@ test "Date: parse ISO8601" {
 	}
 
 	{
+		//valid YYYYMMDD
+		try t.expectEqual(Date{.year = 2023, .month = 5, .day = 22}, try Date.parse("20230522", .iso8601));
+		try t.expectEqual(Date{.year = -2023, .month = 2, .day = 3}, try Date.parse("-20230203", .iso8601));
+		try t.expectEqual(Date{.year = 1, .month = 2, .day = 3}, try Date.parse("00010203", .iso8601));
+		try t.expectEqual(Date{.year = -1, .month = 2, .day = 3}, try Date.parse("-00010203", .iso8601));
+	}
+
+	{
 		// invalid format
 		try t.expectError(error.InvalidDate, Date.parse("", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("20230102", .iso8601));
 		try t.expectError(error.InvalidDate, Date.parse("2023/01-02", .iso8601));
 		try t.expectError(error.InvalidDate, Date.parse("2023-01/02", .iso8601));
 		try t.expectError(error.InvalidDate, Date.parse("0001-01-01 ", .iso8601));
@@ -1330,9 +1338,20 @@ test "DateTime: parse RFC3339" {
 	}
 
 	{
+		const dt = try DateTime.parse("20230102T23:59:58.987654321Z", .rfc3339);
+		try t.expectEqual(1672703998987654, dt.micros);
+		try t.expectEqual(2023, dt.date().year);
+		try t.expectEqual(1, dt.date().month);
+		try t.expectEqual(2, dt.date().day);
+		try t.expectEqual(23, dt.time().hour);
+		try t.expectEqual(59, dt.time().min);
+		try t.expectEqual(58, dt.time().sec);
+		try t.expectEqual(987654, dt.time().micros);
+	}
+
+	{
 		// invalid format
 		try t.expectError(error.InvalidDate, DateTime.parse("", .rfc3339));
-		try t.expectError(error.InvalidDate, DateTime.parse("20230102T00:00Z", .rfc3339));
 		try t.expectError(error.InvalidDate, DateTime.parse("2023/01-02T00:00Z", .rfc3339));
 		try t.expectError(error.InvalidDate, DateTime.parse("2023-01/02T00:00Z", .rfc3339));
 		try t.expectError(error.InvalidDateTime, DateTime.parse("0001-01-01 T00:00Z", .rfc3339));
