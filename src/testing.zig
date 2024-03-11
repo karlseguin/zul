@@ -16,6 +16,29 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 		} else if (ptr.child == []u8 or ptr.child == []const u8) {
 			return expectStrings(expected, actual);
 		},
+		.Struct => |structType| {
+			inline for (structType.fields) |field| {
+				try expectEqual(@field(expected, field.name), @field(actual, field.name));
+			}
+		},
+		.Union => |union_info| {
+			if (union_info.tag_type == null) {
+					@compileError("Unable to compare untagged union values");
+			}
+			const Tag = std.meta.Tag(@TypeOf(expected));
+
+			const expectedTag = @as(Tag, expected);
+			const actualTag = @as(Tag, actual);
+			try expectEqual(expectedTag, actualTag);
+
+			inline for (std.meta.fields(@TypeOf(actual))) |fld| {
+				if (std.mem.eql(u8, fld.name, @tagName(actualTag))) {
+					try expectEqual(@field(expected, fld.name), @field(actual, fld.name));
+					return;
+				}
+			}
+			unreachable;
+		},
 		else => {},
 	}
 	return std.testing.expectEqual(@as(@TypeOf(actual), expected), actual);
