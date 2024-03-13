@@ -13,7 +13,7 @@ pub const UUID = struct {
 	pub fn seed() void {
 		var b: [2]u8 = undefined;
 		crypto.random.bytes(&b);
-		@atomicStore(u16, *clock_sequence, std.mem.readInt(u16, &b, .big), .Monotonic);
+		@atomicStore(u16, *clock_sequence, std.mem.readInt(u16, &b, .big), .monotonic);
 	}
 
 	pub fn v4() UUID {
@@ -26,11 +26,11 @@ pub const UUID = struct {
 
 	pub fn v7() UUID {
 		const ts: u64 = @intCast(std.time.milliTimestamp());
-		const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .Monotonic);
+		const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .monotonic);
 		const sequence = if (ts <= last)
-			@atomicRmw(u16, &clock_sequence, .Add, 1, .Monotonic) + 1
+			@atomicRmw(u16, &clock_sequence, .Add, 1, .monotonic) + 1
 		else
-			@atomicLoad(u16, &clock_sequence, .Monotonic);
+			@atomicLoad(u16, &clock_sequence, .monotonic);
 
 		var bin: [16]u8 = undefined;
 		const ts_buf = std.mem.asBytes(&ts);
