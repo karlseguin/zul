@@ -20,6 +20,7 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
 			inline for (structType.fields) |field| {
 				try expectEqual(@field(expected, field.name), @field(actual, field.name));
 			}
+			return;
 		},
 		.Union => |union_info| {
 			if (union_info.tag_type == null) {
