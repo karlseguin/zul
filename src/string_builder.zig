@@ -339,6 +339,14 @@ pub const StringBuilder = struct {
 			try self.sb.write(data);
 			return data.len;
 		}
+
+		pub fn writeAll(self: Writer, data: []const u8) Allocator.Error!void {
+			try self.sb.write(data);
+		}
+
+		pub fn writeByte(self: Writer, b: u8) Allocator.Error!void {
+			try self.sb.writeByte(b);
+		}
 	};
 };
 
@@ -697,12 +705,23 @@ test "StringBuilder: fuzz" {
 	}
 }
 
-test "StringBuilder: writer" {
+test "StringBuilder: writer json" {
 	var sb = StringBuilder.init(t.allocator);
 	defer sb.deinit();
 
 	try std.json.stringify(.{.over = 9000, .spice = "must flow", .ok = true}, .{}, sb.writer());
 	try t.expectEqual("{\"over\":9000,\"spice\":\"must flow\",\"ok\":true}", sb.string());
+}
+
+test "StringBuilder: writer direct" {
+	var sb = StringBuilder.init(t.allocator);
+	defer sb.deinit();
+
+	var writer = sb.writer();
+	try writer.writeByte('9');
+	try writer.writeAll("9000");
+	try t.expectEqual(2, try writer.write("!!"));
+	try t.expectEqual("99000!!", sb.string());
 }
 
 test "StringBuilder: copy" {
