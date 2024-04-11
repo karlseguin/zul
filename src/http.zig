@@ -119,7 +119,7 @@ pub const Request = struct {
 			return error.MethodCannotHaveBody;
 		}
 
-		const uri = blk: {
+		var uri = blk: {
 			// Strip out the trailing ? or & that our code added
 			var url = self.url.string();
 			const last_char = url[url.len - 1];
@@ -127,6 +127,15 @@ pub const Request = struct {
 				url = url[0..url.len - 1];
 			}
 			break :blk try std.Uri.parse(url);
+		};
+
+		// This is silly, and it's to accomodate a recent (and I think wrong) change
+		// in Zig where it assumes that the query string is percent encoded. This
+		// is not how it used to behave, and I'm pretty sure this is a regression, but
+		// for now, we'll deal with it.
+		if (uri.query) |q| switch (q) {
+			.raw => {},
+			.percent_encoded => |value| uri.query = .{.raw = value},
 		};
 
 		var server_header_buffer: [8 * 1024]u8 = undefined;
@@ -154,7 +163,7 @@ pub const Request = struct {
 			if (file) |f| f.close();
 		}
 
-		try req.send(.{});
+		try req.send();
 
 		switch (self._body) {
 			.str => |str| try req.writeAll(str),
