@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
 			.root_source_file = .{ .path = "src/zul.zig" },
 			.target = target,
 			.optimize = optimize,
-			.test_runner = "test_runner.zig",
+			.test_runner = .{.path = "test_runner.zig"},
 		});
 
 		const run_test = b.addRunArtifact(lib_test);
