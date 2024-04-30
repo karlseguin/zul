@@ -107,6 +107,46 @@ pub const Request = struct {
 		self._body = .{.file = file_path};
 	}
 
+	pub fn formBody(self: *Request, args: std.StringHashMap([]const u8)) !void {
+		try self.header("Content-Type", "application/x-www-form-urlencoded");
+
+		// A quick estimate of the final encoded length. We could use
+		// encodeQueryComponentLen to get the exact final length, but that's relative
+		// heavy. Instead we'll juse use the key and value length, and add a bit
+		// of padding.
+		var len: usize = 0;
+		{
+			var it = args.iterator();
+			while (it.next()) |kv| {
+				len += kv.key_ptr.len + kv.value_ptr.len + 10;
+			}
+		}
+		if (len == 0) {
+			self._body = .{.str = ""};
+			return;
+		}
+
+		var arr = std.ArrayList(u8).init(self._arena.allocator());
+		try arr.ensureTotalCapacity(len);
+
+		var writer = arr.writer();
+
+		var it = args.iterator();
+		const first = it.next().?;  // cannot be null, else above len == 0 and we'd have returend
+		try encodeQueryComponent(first.key_ptr.*, writer);
+		try writer.writeByte('=');
+		try encodeQueryComponent(first.value_ptr.*, writer);
+
+		while (it.next()) |kv| {
+			try writer.writeByte('&');
+			try encodeQueryComponent(kv.key_ptr.*, writer);
+			try writer.writeByte('=');
+			try encodeQueryComponent(kv.value_ptr.*, writer);
+		}
+
+		self._body = .{.str = arr.items};
+	}
+
 	pub const Opts = struct{
 		response_headers: bool = true,
 	};
@@ -245,6 +285,39 @@ pub const Response = struct {
 	}
 };
 
+pub fn encodeQueryComponentLen(s: []const u8) usize {
+	var escape_count: usize = 0;
+	for (s) |c| {
+		if (shouldEscape(c)) {
+			escape_count += 1;
+		}
+	}
+
+	return s.len + 2 * escape_count;
+}
+
+const UPPER_HEX = "0123456789ABCDEF";
+
+pub fn encodeQueryComponent(s: []const u8, writer: anytype) !void {
+	for (s) |c| {
+		if (shouldEscape(c)) {
+			try writer.writeByte('%');
+			try writer.writeByte(UPPER_HEX[c >> 4]);
+			try writer.writeByte(UPPER_HEX[c & 15]);
+		} else {
+			try writer.writeByte(c);
+		}
+	}
+}
+
+fn shouldEscape(c: u8) bool {
+	// fast path for common cases
+	if (std.ascii.isAlphanumeric(c)) {
+		return false;
+	}
+	return c != '-' and c != '_' and c != '.' and c != '~';
+}
+
 const t = zul.testing;
 test "http.Request: headers" {
 	defer t.reset();
@@ -351,6 +424,47 @@ test "http.Request: body" {
 		try t.expectEqual("41", res.header("REQ-content-length").?);
 		try t.expectEqual("a file for testing recursive fs iterator\n", m.value.body);
 	}
+
+	{
+		// empty body
+		var req = try client.request("http://127.0.0.1:6370/echo");
+		req.method = .POST;
+		defer req.deinit();
+
+		var args = std.StringHashMap([]const u8).init(t.allocator);
+		defer args.deinit();
+		try req.formBody(args);
+
+		var res = try req.getResponse(.{});
+		try t.expectEqual("0", res.header("REQ-content-length").?);
+
+		const m = try res.json(TestEcho, t.allocator, .{});
+		defer m.deinit();
+		try t.expectEqual("", m.value.body);
+	}
+
+	{
+		// empty body
+		var req = try client.request("http://127.0.0.1:6370/echo");
+		req.method = .POST;
+		defer req.deinit();
+
+		var args = std.StringHashMap([]const u8).init(t.allocator);
+		defer args.deinit();
+		try args.put("hello", "world");
+		try args.put("year", ">= 2000");
+		try req.formBody(args);
+
+		var res = try req.getResponse(.{});
+		try t.expectEqual("30", res.header("REQ-content-length").?);
+
+		const m = try res.json(TestEcho, t.allocator, .{});
+		defer m.deinit();
+		try t.expectEqual(true,
+			std.mem.eql(u8, m.value.body, "year=%3E%3D%202000&hello=world") or
+			std.mem.eql(u8, m.value.body, "hello=world&year=%3E%3D%202000")
+		);
+	}
 }
 
 test "http.Response: body" {
@@ -399,6 +513,49 @@ test "http.Response: body" {
 		const sb = try res.allocBody(t.allocator, .{});
 		defer sb.deinit();
 		try t.expectEqual("hello", sb.string());
+	}
+}
+
+test "http: encodeQueryComponentLen" {
+	try t.expectEqual(0, encodeQueryComponentLen(""));
+	try t.expectEqual(3, encodeQueryComponentLen("teg"));
+	try t.expectEqual(5, encodeQueryComponentLen("t G"));
+	try t.expectEqual(5, encodeQueryComponentLen("t G"));
+	try t.expectEqual(9, encodeQueryComponentLen("☺"));
+	try t.expectEqual(102, encodeQueryComponentLen(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;"));
+}
+
+test "http: encodeQueryComponent" {
+	var arr = std.ArrayList(u8).init(t.allocator);
+	defer arr.deinit();
+
+	{
+		try encodeQueryComponent("", arr.writer());
+		try t.expectEqual("", arr.items);
+	}
+
+	{
+		arr.clearRetainingCapacity();
+		try encodeQueryComponent("hello_world", arr.writer());
+		try t.expectEqual("hello_world", arr.items);
+	}
+
+	{
+		arr.clearRetainingCapacity();
+		try encodeQueryComponent("hello world", arr.writer());
+		try t.expectEqual("hello%20world", arr.items);
+	}
+
+	{
+		arr.clearRetainingCapacity();
+		try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", arr.writer());
+		try t.expectEqual("%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", arr.items);
+	}
+
+	{
+		arr.clearRetainingCapacity();
+		try encodeQueryComponent("☺", arr.writer());
+		try t.expectEqual("%E2%98%BA", arr.items);
 	}
 }
 

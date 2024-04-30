@@ -134,6 +134,12 @@ fn allocRequest(
 		</div>
 	</div>
 	<div class=member>
+		<code class=name id=Request.formBody><a href=#Request.formBody aria-hidden=true>formBody(self: *Request, args: std.StringHashMap([]const u8)) !void</a></code>
+		<div class=desc>
+			<p>URL encodes <code>args</code> and sets the body to it. The <code>Content-Type</code>header is set to <code>application/x-www-form-urlencoded</code>.</p>
+		</div>
+	</div>
+	<div class=member>
 		<code class=name id=Request.header><a href=#Request.header aria-hidden=true>header(self: *Request, name: []const u8, value: []const u8) !void</a></code>
 		<div class=desc>
 			<p>Adds the given name-value pair to the request headers.</p>
