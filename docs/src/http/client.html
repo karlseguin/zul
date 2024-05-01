@@ -134,9 +134,9 @@ fn allocRequest(
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=Request.formBody><a href=#Request.formBody aria-hidden=true>formBody(self: *Request, args: std.StringHashMap([]const u8)) !void</a></code>
+		<code class=name id=Request.formBody><a href=#Request.formBody aria-hidden=true>formBody(self: *Request, key: []const u8, value: []const u8) !void</a></code>
 		<div class=desc>
-			<p>URL encodes <code>args</code> and sets the body to it. The <code>Content-Type</code>header is set to <code>application/x-www-form-urlencoded</code>.</p>
+			<p>Builds a URL encoded body. Can be called multiple times. The first call will se the <code>Content-Type</code>header to <code>application/x-www-form-urlencoded</code>.</p>
 		</div>
 	</div>
 	<div class=member>

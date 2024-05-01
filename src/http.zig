@@ -32,6 +32,7 @@ pub const Request = struct {
 	_client: *std.http.Client,
 	_arena: *std.heap.ArenaAllocator,
 	_req: ?std.http.Client.Request = null,
+	_body_writer: std.ArrayList(u8),
 
 	url: StringBuilder,
 	method: std.http.Method = .GET,
@@ -69,6 +70,7 @@ pub const Request = struct {
 		return .{
 			._client = client,
 			._arena = arena,
+			._body_writer = std.ArrayList(u8).init(aa),
 			.url = url_builder,
 			.headers = std.ArrayList(std.http.Header).init(aa),
 		};
@@ -107,44 +109,23 @@ pub const Request = struct {
 		self._body = .{.file = file_path};
 	}
 
-	pub fn formBody(self: *Request, args: std.StringHashMap([]const u8)) !void {
-		try self.header("Content-Type", "application/x-www-form-urlencoded");
+	pub fn formBody(self: *Request, key: []const u8, value: []const u8) !void {
+		var bw = &self._body_writer;
 
-		// A quick estimate of the final encoded length. We could use
-		// encodeQueryComponentLen to get the exact final length, but that's relative
-		// heavy. Instead we'll juse use the key and value length, and add a bit
-		// of padding.
-		var len: usize = 0;
-		{
-			var it = args.iterator();
-			while (it.next()) |kv| {
-				len += kv.key_ptr.len + kv.value_ptr.len + 10;
-			}
-		}
-		if (len == 0) {
-			self._body = .{.str = ""};
-			return;
+		// +5 for random extra overhead (of encoding)
+		try bw.ensureUnusedCapacity(key.len + value.len + 5);
+		if (bw.items.len == 0) {
+			try self.header("Content-Type", "application/x-www-form-urlencoded");
+		} else {
+			try bw.append('&');
 		}
 
-		var arr = std.ArrayList(u8).init(self._arena.allocator());
-		try arr.ensureTotalCapacity(len);
+		const writer = bw.writer();
+		try encodeQueryComponent(key, writer);
+		try bw.append('=');
+		try encodeQueryComponent(value, writer);
 
-		var writer = arr.writer();
-
-		var it = args.iterator();
-		const first = it.next().?;  // cannot be null, else above len == 0 and we'd have returend
-		try encodeQueryComponent(first.key_ptr.*, writer);
-		try writer.writeByte('=');
-		try encodeQueryComponent(first.value_ptr.*, writer);
-
-		while (it.next()) |kv| {
-			try writer.writeByte('&');
-			try encodeQueryComponent(kv.key_ptr.*, writer);
-			try writer.writeByte('=');
-			try encodeQueryComponent(kv.value_ptr.*, writer);
-		}
-
-		self._body = .{.str = arr.items};
+		self._body = .{.str = bw.items};
 	}
 
 	pub const Opts = struct{
@@ -169,7 +150,7 @@ pub const Request = struct {
 			break :blk try std.Uri.parse(url);
 		};
 
-		// This is silly, and it's to accomodate a recent (and I think wrong) change
+		// This is silly, and it's to accommodate a recent (and I think wrong) change
 		// in Zig where it assumes that the query string is percent encoded. This
 		// is not how it used to behave, and I'm pretty sure this is a regression, but
 		// for now, we'll deal with it.
@@ -426,37 +407,35 @@ test "http.Request: body" {
 	}
 
 	{
-		// empty body
+		// single field
 		var req = try client.request("http://127.0.0.1:6370/echo");
 		req.method = .POST;
 		defer req.deinit();
 
 		var args = std.StringHashMap([]const u8).init(t.allocator);
 		defer args.deinit();
-		try req.formBody(args);
+		try req.formBody("a", "b");
 
 		var res = try req.getResponse(.{});
-		try t.expectEqual("0", res.header("REQ-content-length").?);
+		try t.expectEqual("3", res.header("REQ-content-length").?);
+		try t.expectEqual("application/x-www-form-urlencoded", res.header("REQ-Content-Type").?);
 
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
-		try t.expectEqual("", m.value.body);
+		try t.expectEqual("a=b", m.value.body);
 	}
 
 	{
-		// empty body
 		var req = try client.request("http://127.0.0.1:6370/echo");
 		req.method = .POST;
 		defer req.deinit();
 
-		var args = std.StringHashMap([]const u8).init(t.allocator);
-		defer args.deinit();
-		try args.put("hello", "world");
-		try args.put("year", ">= 2000");
-		try req.formBody(args);
+		try req.formBody("hello", "world");
+		try req.formBody("year", ">= 2000");
 
 		var res = try req.getResponse(.{});
 		try t.expectEqual("30", res.header("REQ-content-length").?);
+		try t.expectEqual("application/x-www-form-urlencoded", res.header("REQ-Content-Type").?);
 
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
