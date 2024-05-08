@@ -147,7 +147,6 @@ test "ThreadPool: large fuzz" {
 	try t.expectEqual(50_000, testSum);
 }
 
-
 var testSum: u64 = 0;
 fn testIncr(c: u64) void {
 	_ = @atomicRmw(u64, &testSum, .Add, c, .monotonic);

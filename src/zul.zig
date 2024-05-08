@@ -7,6 +7,7 @@ pub const testing = @import("testing.zig");
 pub const benchmark = @import("benchmark.zig");
 
 pub const UUID = @import("uuid.zig").UUID;
+pub const Scheduler = @import("scheduler.zig").Scheduler;
 pub const ThreadPool = @import("thread_pool.zig").ThreadPool;
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
 pub const CommandLineArgs = @import("command_line_args.zig").CommandLineArgs;
