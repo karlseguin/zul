@@ -209,6 +209,40 @@ const Expensive = struct {
 };
 ```
 
+## [zul.Scheduler](https://www.goblgobl.com/zul/scheduler/)
+Ephemeral thread-based task scheduler used to run tasks at a specific time.
+
+```zig
+// Where multiple types of tasks can be scheduled using the same schedule,
+//  a tagged union is ideal.
+const Task = union(enum) {
+	say: []const u8,
+
+	// Whether T is a tagged union (as here) or another type, a public
+	// run function must exist
+	pub fn run(task: Task, at: i64) void {
+		_ = at; // the original time the task was scheduled for
+		switch (task) {
+			.say => |msg| {std.debug.print("{s}\n", .{msg}),
+		}
+	}
+}
+
+...
+
+var s = zul.Scheduler(Task).init(allocator);
+defer s.deinit();
+
+// Starts the scheduler, launching a new thread
+try s.start();
+
+// will run the say task in 5 seconds
+try s.scheduleIn(.{.say = "world"}, std.time.ms_per_s * 5);
+
+// will run the say task in 100 milliseconds
+try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
+```
+
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)
 Efficiently create/concat strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.
 

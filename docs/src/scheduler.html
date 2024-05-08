@@ -1,0 +1,92 @@
+---
+layout: site.njk
+title: zul.Scheduler
+---
+
+<h1 id=zul.Scheduler(T)><a href=#zul.Scheduler(T) aria-hidden=true>zul.Scheduler(T)</a></h1>
+<p>Ephemeral thread-based task scheduler used to run tasks at a specific time.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// Where multiple types of tasks can be scheduled using the same schedule,
+//  a tagged union is ideal.
+const Task = union(enum) {
+	say: []const u8,
+
+	// Whether T is a tagged union (as here) or another type, a public
+	// run function must exist
+	pub fn run(task: Task, at: i64) void {
+		_ = at; // the original time the task was scheduled for
+		switch (task) {
+			.say => |msg| {std.debug.print("{s}\n", .{msg}),
+		}
+	}
+}
+
+...
+
+var s = zul.Scheduler(Task).init(allocator);
+defer s.deinit();
+
+// Starts the scheduler, launching a new thread
+try s.start();
+
+// will run the say task in 5 seconds
+try s.scheduleIn(.{.say = "world"}, std.time.ms_per_s * 5);
+
+// will run the say task in 100 milliseconds
+try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
+{% endhighlight %}
+
+<h2 id=Scheduler><a href=#Scheduler aria-hidden=true>Scheduler(T) struct</a></h2>
+<p><code>zul.Scheduler(T)</code> is a thread-safe way to schedule tasks for future execution. Tasks can be scheduled using the <code>schedule()</code>, <code>scheduleIn()</code> or <code>scheduleAt()</code> methods. These methods are thread-safe.</p>
+
+<p>The scheduler runs in its own thread (started by calling <code>start()</code>). Importantly, tasks are run within the scheduler thread and thus can delay each other. Consider having your tasks use <a href={{ env.baseURL }}/thread_pool>zul.ThreadPool</a> in more advanced cases.</p>
+
+<p>Tasks are not persisted (e.g. if the schedule or program crashes, scheduled jobs are lost). Otherwise, the scheduler never discards a task. Tasks that were scheduled in the past are run normally. Applications that care about stale tasks can use the 2nd parameter passed to <code>T.run</code> which is the original scheduled timestamp (in milliseconds).</p>
+
+<h3 id=Scheduler.methods><a href=#Scheduler.methods aria-hidden=true>Methods</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=Scheduler.init><a href=#Scheduler.init aria-hidden=true>init(allocator: Allocator) Scheduler(T)</a></code>
+		<div class=desc>
+			<p>Creates a <code>Scheduler</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.deinit><a href=#Scheduler.deinit aria-hidden=true>deinit(self: *Scheduler(T)) void</a></code>
+		<div class=desc>
+			<p>Stops the task scheduler thread (if it was started) and deallocates the scheduler. This method is thread-safe.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.start><a href=#Scheduler.start aria-hidden=true>start(self: *Scheduler(T)) !void</a></code>
+		<div class=desc>
+			<p>Launches the task scheduler in a new thread. This method is thread-safe. An error is returned if start is called multiple times.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.stop><a href=#Scheduler.stop aria-hidden=true>stop(self: *Scheduler(T)) void</a></code>
+		<div class=desc>
+			<p>Stops the task scheduler. This method is thread-safe. It is safe to call multiple times, even if the scheduler is not started. Since <code>deinit</code> calls this method, it is usually not necessary to call it.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.schedule><a href=#Scheduler.schedule aria-hidden=true>schedule(self: *Scheduler(T), task: T, at: i64) !void</a></code>
+		<div class=desc>
+			<p>Schedules a task to be run at the specified time. The time is given as a unix timestamp in milliseconds. The time can be in the past.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.scheduleIn><a href=#Scheduler.scheduleIn aria-hidden=true>scheduleIn(self: *Scheduler(T), task: T, ms: i64) !void</a></code>
+		<div class=desc>
+			<p>Schedules a task to be run in the specified milliseconds from now. This is the same as calling <code>schedule</code> with <code>std.time.milliTimestamp() + ms</code>.</p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=Scheduler.scheduleAt><a href=#Scheduler.scheduleAt aria-hidden=true>scheduleAt(self: *Scheduler(T), task: T, dt: zul.DateTime) !void</a></code>
+		<div class=desc>
+			<p>Schedules a task to be run at the specified DateTime.</p>
+		</div>
+	</div>
+</div>

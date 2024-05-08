@@ -43,7 +43,14 @@ pub fn Scheduler(comptime T: type) type {
 		}
 
 		pub fn start(self: *Self) !void {
-			self.running = true;
+			{
+				self.mutex.lock();
+				defer self.mutex.unlock();
+				if (self.running == true) {
+					return error.AlreadyRunning;
+				}
+				self.running = true;
+			}
 			self.thread = try Thread.spawn(.{}, Self.run, .{self});
 		}
 
@@ -65,7 +72,7 @@ pub fn Scheduler(comptime T: type) type {
 			return self.schedule(task, date.unix(.milliseconds));
 		}
 
-		pub fn scheduleIn(self: *Self, task: T, ms: i32) !void {
+		pub fn scheduleIn(self: *Self, task: T, ms: i64) !void {
 			return self.schedule(task, std.time.milliTimestamp() + ms);
 		}
 
@@ -156,6 +163,8 @@ test "Scheduler" {
 	defer s.deinit();
 
 	try s.start();
+
+	try t.expectError(error.AlreadyRunning, s.start());
 
 	// test that past jobs are run
 	var counter: usize = 0;
