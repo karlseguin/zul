@@ -19,7 +19,7 @@ const Task = union(enum) {
 		// the original time the task was scheduled for
 		_ = at;
 
-		// application-specific context that can be passed to each task
+		// application-specific context that will be passed to each task
 		_ ctx;
 
 		switch (task) {
@@ -31,12 +31,14 @@ const Task = union(enum) {
 ...
 
 // This example doesn't use a app-context, so we specify it's
-// type as void and pass a void value, i.e {}.
-var s = zul.Scheduler(Task, void).init(allocator, {});
+// type as void
+var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();
 
 // Starts the scheduler, launching a new thread
-try s.start();
+// We pass start our context. Since we have a null context
+// we pass a null value, i.e. {}
+try s.start({});
 
 // will run the say task in 5 seconds
 try s.scheduleIn(.{.say = "world"}, std.time.ms_per_s * 5);
@@ -57,7 +59,7 @@ try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
 	<div class=member>
 		<code class=name id=Scheduler.init><a href=#Scheduler.init aria-hidden=true>init(allocator: Allocator, ctx: C) Scheduler(T)</a></code>
 		<div class=desc>
-			<p>Creates a <code>Scheduler</code>. The provided <code>ctx</code> will be passed to <code>T.run</code>. In cases where no ctx is needed, <code>void</code> with a void value (<code>{}</code>) should be used, e.g.: Scheduler(T, void).init(allocator, {}).</p>
+			<p>Creates a <code>Scheduler</code>.</p>
 		</div>
 	</div>
 	<div class=member>
@@ -67,9 +69,11 @@ try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=Scheduler.start><a href=#Scheduler.start aria-hidden=true>start(self: *Scheduler(T)) !void</a></code>
+		<code class=name id=Scheduler.start><a href=#Scheduler.start aria-hidden=true>start(self: *Scheduler(T), ctx: C) !void</a></code>
 		<div class=desc>
 			<p>Launches the task scheduler in a new thread. This method is thread-safe. An error is returned if start is called multiple times.</p>
+
+			<p>The provided <code>ctx</code> will be passed to <code>T.run</code>. In cases where no ctx is needed, a <code>void</code> context should be used, as shown in the initial example.</p>
 		</div>
 	</div>
 	<div class=member>

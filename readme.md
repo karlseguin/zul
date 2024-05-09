@@ -220,8 +220,13 @@ const Task = union(enum) {
 
 	// Whether T is a tagged union (as here) or another type, a public
 	// run function must exist
-	pub fn run(task: Task, at: i64) void {
-		_ = at; // the original time the task was scheduled for
+	pub fn run(task: Task, ctx: void, at: i64) void {
+		// the original time the task was scheduled for
+		_ = at;
+
+		// application-specific context that will be passed to each task
+		_ ctx;
+
 		switch (task) {
 			.say => |msg| {std.debug.print("{s}\n", .{msg}),
 		}
@@ -230,11 +235,15 @@ const Task = union(enum) {
 
 ...
 
-var s = zul.Scheduler(Task).init(allocator);
+// This example doesn't use a app-context, so we specify it's
+// type as void
+var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();
 
 // Starts the scheduler, launching a new thread
-try s.start();
+// We pass start our context. Since we have a null context
+// we pass a null value, i.e. {}
+try s.start({});
 
 // will run the say task in 5 seconds
 try s.scheduleIn(.{.say = "world"}, std.time.ms_per_s * 5);

@@ -13,7 +13,6 @@ fn Job(comptime T: type) type {
 
 pub fn Scheduler(comptime T: type, comptime C: type) type {
 	return struct {
-		ctx: C,
 		queue: Q,
 		running: bool,
 		mutex: Thread.Mutex,
@@ -28,9 +27,8 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 
 		const Self = @This();
 
-		pub fn init(allocator: Allocator, ctx: C) Self {
+		pub fn init(allocator: Allocator) Self {
 			return .{
-				.ctx = ctx,
 				.cond = .{},
 				.mutex = .{},
 				.thread = null,
@@ -44,7 +42,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 			self.queue.deinit();
 		}
 
-		pub fn start(self: *Self) !void {
+		pub fn start(self: *Self, ctx: C) !void {
 			{
 				self.mutex.lock();
 				defer self.mutex.unlock();
@@ -53,7 +51,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 				}
 				self.running = true;
 			}
-			self.thread = try Thread.spawn(.{}, Self.run, .{self});
+			self.thread = try Thread.spawn(.{}, Self.run, .{self, ctx});
 		}
 
 		pub fn stop(self: *Self) void {
@@ -108,11 +106,11 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 		}
 
 		// this is running in a separate thread, started by start()
-		fn run(self: *Self) void {
+		fn run(self: *Self, ctx: C) void {
 			self.mutex.lock();
 
 			while (true) {
-				const ms_until_next = self.processPending();
+				const ms_until_next = self.processPending(ctx);
 
 				// mutex is locked when returning for processPending
 
@@ -140,9 +138,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 		// we enter this function with mutex locked
 		// and we exit this function with the mutex locked
 		// importantly, we don't lock the mutex will process the task
-		fn processPending(self: *Self) ?i64 {
-			const ctx = self.ctx;
-
+		fn processPending(self: *Self, ctx: C) ?i64 {
 			while (true) {
 				const next = self.queue.peek() orelse {
 					// yes, we must return this function with a locked mutex
@@ -166,12 +162,12 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 
 const t = @import("zul.zig").testing;
 test "Scheduler: null context" {
-	var s = Scheduler(TestTask, void).init(t.allocator, {});
+	var s = Scheduler(TestTask, void).init(t.allocator);
 	defer s.deinit();
 
-	try s.start();
+	try s.start({});
 
-	try t.expectError(error.AlreadyRunning, s.start());
+	try t.expectError(error.AlreadyRunning, s.start({}));
 
 	// test that past jobs are run
 	var counter: usize = 0;
@@ -202,11 +198,11 @@ test "Scheduler: null context" {
 }
 
 test "Scheduler: with context" {
-	var ctx: usize = 3;
-	var s = Scheduler(TestCtxTask, *usize).init(t.allocator, &ctx);
+	var s = Scheduler(TestCtxTask, *usize).init(t.allocator);
 	defer s.deinit();
 
-	try s.start();
+	var ctx: usize = 3;
+	try s.start(&ctx);
 	// test that past jobs are run
 	try s.scheduleIn(.{.add = 2}, 4);
 	try s.scheduleIn(.{.add = 4}, 8);
