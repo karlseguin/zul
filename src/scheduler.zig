@@ -82,18 +82,20 @@ pub fn Scheduler(comptime T: type) type {
 				.task = task,
 			};
 
-			self.mutex.lock();
-			defer self.mutex.unlock();
-
 			var reschedule = false;
-			if (self.queue.peek()) |*next| {
-				if (at < next.at) {
+			{
+				self.mutex.lock();
+				defer self.mutex.unlock();
+
+				if (self.queue.peek()) |*next| {
+					if (at < next.at) {
+						reschedule = true;
+					}
+				} else {
 					reschedule = true;
 				}
-			} else {
-				reschedule = true;
+				try self.queue.add(job);
 			}
-			try self.queue.add(job);
 
 			if (reschedule) {
 				// Our new job is scheduled before our previous earlier job
@@ -118,7 +120,8 @@ pub fn Scheduler(comptime T: type) type {
 				}
 
 				if (ms_until_next) |timeout| {
-					self.cond.timedWait(&self.mutex, @intCast(timeout * std.time.ns_per_ms)) catch |err| {
+					const ns = @as(u64, @intCast(timeout * std.time.ns_per_ms));
+					self.cond.timedWait(&self.mutex, ns) catch |err| {
 						std.debug.assert(err == error.Timeout);
 						// on success or error, cond locks mutex, which is what we want
 					};
