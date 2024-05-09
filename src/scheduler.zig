@@ -11,8 +11,9 @@ fn Job(comptime T: type) type {
 	};
 }
 
-pub fn Scheduler(comptime T: type) type {
+pub fn Scheduler(comptime T: type, comptime C: type) type {
 	return struct {
+		ctx: C,
 		queue: Q,
 		running: bool,
 		mutex: Thread.Mutex,
@@ -27,8 +28,9 @@ pub fn Scheduler(comptime T: type) type {
 
 		const Self = @This();
 
-		pub fn init(allocator: Allocator) Self {
+		pub fn init(allocator: Allocator, ctx: C) Self {
 			return .{
+				.ctx = ctx,
 				.cond = .{},
 				.mutex = .{},
 				.thread = null,
@@ -139,6 +141,8 @@ pub fn Scheduler(comptime T: type) type {
 		// and we exit this function with the mutex locked
 		// importantly, we don't lock the mutex will process the task
 		fn processPending(self: *Self) ?i64 {
+			const ctx = self.ctx;
+
 			while (true) {
 				const next = self.queue.peek() orelse {
 					// yes, we must return this function with a locked mutex
@@ -154,15 +158,15 @@ pub fn Scheduler(comptime T: type) type {
 				const job = self.queue.remove();
 				self.mutex.unlock();
 				defer self.mutex.lock();
-				job.task.run(next.at);
+				job.task.run(ctx, next.at);
 			}
 		}
 	};
 }
 
 const t = @import("zul.zig").testing;
-test "Scheduler" {
-	var s = Scheduler(TestTask).init(t.allocator);
+test "Scheduler: null context" {
+	var s = Scheduler(TestTask, void).init(t.allocator, {});
 	defer s.deinit();
 
 	try s.start();
@@ -197,11 +201,27 @@ test "Scheduler" {
 	try t.expectEqual(1, history.records[2]);
 }
 
+test "Scheduler: with context" {
+	var ctx: usize = 3;
+	var s = Scheduler(TestCtxTask, *usize).init(t.allocator, &ctx);
+	defer s.deinit();
+
+	try s.start();
+	// test that past jobs are run
+	try s.scheduleIn(.{.add = 2}, 4);
+	try s.scheduleIn(.{.add = 4}, 8);
+
+	std.time.sleep(std.time.ns_per_ms * 20);
+	s.stop();
+
+	try t.expectEqual(9, ctx);
+}
+
 const TestTask = union(enum) {
 	counter: *usize,
 	recorder: Recorder,
 
-	fn run(self: TestTask, _: i64) void {
+	fn run(self: TestTask, _: void, _: i64) void {
 		switch (self) {
 			.counter => |c| c.* += 1,
 			.recorder => |r| {
@@ -221,4 +241,14 @@ const TestTask = union(enum) {
 		pos: usize,
 		records: [3]usize,
 	};
+};
+
+const TestCtxTask = union(enum) {
+	add: usize,
+
+	fn run(self: TestCtxTask, sum: *usize, _: i64) void {
+		switch (self) {
+			.add => |c| sum.* += c,
+		}
+	}
 };
