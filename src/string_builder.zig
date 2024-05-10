@@ -112,15 +112,22 @@ pub const StringBuilder = struct {
 		self.pos = 0;
 	}
 
-	pub fn len(self: StringBuilder) usize {
+	pub fn len(self: *const StringBuilder) usize {
 		return self.pos;
 	}
 
-	pub fn string(self: StringBuilder) []u8 {
+	pub fn string(self: *const StringBuilder) []u8 {
 		return self.buf[0..self.pos];
 	}
 
-	pub fn copy(self: StringBuilder, allocator: Allocator) ![]u8 {
+	pub fn stringZ(self: *StringBuilder) ![:0]u8 {
+		const pos = self.pos;
+		try self.writeByte(0);
+		self.pos = pos;
+		return self.buf[0..pos:0];
+	}
+
+	pub fn copy(self: *const StringBuilder, allocator: Allocator) ![]u8 {
 		const pos = self.pos;
 		const c = try allocator.alloc(u8, pos);
 		@memcpy(c, self.buf[0..pos]);
@@ -973,6 +980,31 @@ test "StringBuilder: fromReader" {
 		});
 		defer sb.deinit();
 		try t.expectEqual(&buf, sb.string());
+	}
+}
+
+test "StringBuilder: stringZ" {
+	var sb = StringBuilder.init(t.allocator);
+	defer sb.deinit();
+
+	{
+		try t.expectEqual("", try sb.stringZ());
+	}
+
+	{
+		sb.clearRetainingCapacity();
+		try sb.write("123");
+		try sb.write("b");
+		try t.expectEqual("123b", try sb.stringZ());
+	}
+
+		{
+		sb.clearRetainingCapacity();
+		try sb.write("123");
+		try t.expectEqual("123", try sb.stringZ());
+
+		try sb.write("b");
+		try t.expectEqual("123b", try sb.stringZ());
 	}
 }
 

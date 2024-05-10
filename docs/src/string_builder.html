@@ -150,6 +150,12 @@ fn fromReader(
 		</div>
 	</div>
 	<div class=member>
+		<code class=name id=StringBuilder.stringZ><a href=#StringBuilder.stringZ aria-hidden=true>stringZ(sb: StringBuilder) ![:0]u8</a></code>
+		<div class=desc>
+			<p>Returns the bytes written as a null-terminated string. Subsequent modifications to the <code>StringBuilder</code> may invalidate the returned data</p>
+		</div>
+	</div>
+	<div class=member>
 		<code class=name id=StringBuilder.truncate><a href=#StringBuilder.truncate aria-hidden=true>truncate(sb: *StringBuilder, n: usize) void</a></code>
 		<div class=desc>
 			<p>Truncates the data by <code>n</code> bytes. If <code>n</code> is greater than the length of the buffer, the length is set to 0. Does not free memory.</p>
