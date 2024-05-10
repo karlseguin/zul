@@ -71,7 +71,7 @@ const search_result = managed.value;
 	<div class=member>
 		<code class=name id=Client.request><a href=#Client.request aria-hidden=true>request(self: *Client, url: []const u8) !Request</a></code>
 		<div class=desc>
-			<p>Creates a <code><a href=#Request>Request</a></code> object, using the provided <code>url</code>. The <code>Request</code> will use the <code>Allocator</code> use the <code>Client</code>'s allocator.</p>
+			<p>Creates a <code><a href=#Request>Request</a></code> object, using the provided <code>url</code>. The <code>Request</code> will use the <code>Client</code>'s allocator. If a querystring is provided as part of the <code>url</code>, it must be properly encoded. Use <a href="#Request.query">query(name, value)</a> to add or append a querystring which the library will encode.</p>
 		</div>
 	</div>
 	<div class=member>
@@ -148,7 +148,7 @@ fn allocRequest(
 	<div class=member>
 		<code class=name id=Request.query><a href=#Request.query aria-hidden=true>query(self: *Request, name: []const u8, value: []const u8) !void</a></code>
 		<div class=desc>
-			<p>Appends the given name-value pair to the request's querystring. Both the name and value will be automatically encoded if needed. The querystring can also be set when first creating the request as part of the specified URL. It is allowed to set some querystring values via the original URLs and others via this method.</p>
+			<p>Appends the given name-value pair to the request's querystring. Both the name and value will be automatically encoded if needed. The querystring can also be set when first creating the request as part of the specified URL. It is allowed to set some querystring values via the original URLs (which must be encoded by the caller) and others via this method.</p>
 		</div>
 	</div>
 	<div class=member>

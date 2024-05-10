@@ -93,12 +93,16 @@ pub const Request = struct {
 
 	pub fn query(self: *Request, name: []const u8, value: []const u8) !void {
 		var url = &self.url;
-		// + 1 for the =  and + 1 for the trailing &
-		try url.ensureUnusedCapacity(name.len + value.len + 2);
-		url.writeAssumeCapacity(name);
-		url.writeByteAssumeCapacity('=');
-		url.writeAssumeCapacity(value);
-		url.writeByteAssumeCapacity('&');
+		// + 1 for the =
+		// + 1 for the trailing &
+		// + 5 as random buffer for escaping
+		try url.ensureUnusedCapacity(name.len + value.len + 7);
+
+		const writer = url.writer();
+		try encodeQueryComponent(name, writer);
+		try url.writeByte('=');
+		try encodeQueryComponent(value, writer);
+		try url.writeByte('&');
 	}
 
 	pub fn body(self: *Request, str: []const u8) void {
@@ -140,7 +144,7 @@ pub const Request = struct {
 			return error.MethodCannotHaveBody;
 		}
 
-		var uri = blk: {
+		const uri = blk: {
 			// Strip out the trailing ? or & that our code added
 			var url = self.url.string();
 			const last_char = url[url.len - 1];
@@ -148,15 +152,6 @@ pub const Request = struct {
 				url = url[0..url.len - 1];
 			}
 			break :blk try std.Uri.parse(url);
-		};
-
-		// This is silly, and it's to accommodate a recent (and I think wrong) change
-		// in Zig where it assumes that the query string is percent encoded. This
-		// is not how it used to behave, and I'm pretty sure this is a regression, but
-		// for now, we'll deal with it.
-		if (uri.query) |q| switch (q) {
-			.raw => {},
-			.percent_encoded => |value| uri.query = .{.raw = value},
 		};
 
 		var server_header_buffer: [8 * 1024]u8 = undefined;
@@ -339,16 +334,18 @@ test "http.Request: querystring" {
 	defer shutdownTestServer(&client, server_thread);
 
 	{
-		var req = try client.request("http://127.0.0.1:6370/echo?query key=query value");
+		// here, we assume the URL is encoded
+		var req = try client.request("http://127.0.0.1:6370/echo?query key=query%20value");
 		defer req.deinit();
 
 		var res = try req.getResponse(.{});
 		const m = try res.json(TestEcho, t.allocator, .{});
 		defer m.deinit();
-		try t.expectEqual("/echo?query%20key=query%20value", m.value.url);
+		try t.expectEqual("/echo?query key=query%20value", m.value.url);
 	}
 
 	{
+		// here, we encode it ourselves
 		var req = try client.request("http://127.0.0.1:6370/echo");
 		defer req.deinit();
 		try req.query("search term", "peanut butter");
