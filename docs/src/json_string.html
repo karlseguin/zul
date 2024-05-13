@@ -1,0 +1,21 @@
+---
+layout: site.njk
+title: zul.JsonString
+---
+
+<h1 id=zul.JsonString><a href=#zul.JsonString aria-hidden=true>zul.JsonString</a></h1>
+<p>Allows the embedding of already-encoded JSON strings into objects in order to avoid double encoded values.</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+const an_encoded_json_value = "{\"over\": 9000}";
+const str = try std.json.stringifyAlloc(allocator, .{
+	.name = "goku,
+	.power = zul.jsonString(an_encoded_json_value),
+}, .{});
+{% endhighlight %}
+
+<h2 id=JsonString><a href=#JsonString aria-hidden=true>JsonString struct</a></h2>
+<p><code>zul.JsonString</code> wraps a <code>[]const u8</code> and implements <code>jsonStringify</code> to write the value as-is. This prevents double-encoding of already-encoded values.</p>
+
+<p>Use the <code>zul.jsonString(str)</code> helper to create a <code>JsonString</code>.</p>

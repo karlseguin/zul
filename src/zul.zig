@@ -40,6 +40,27 @@ pub fn Managed(comptime T: type) type {
 	};
 }
 
+pub fn jsonString(raw: []const u8) JsonString {
+	return .{.raw = raw};
+}
+
+pub const JsonString = struct {
+	raw: []const u8,
+
+	pub fn jsonStringify(self: JsonString, jws: anytype) !void {
+		return jws.print("{s}", .{self.raw});
+	}
+};
+
 test {
 	@import("std").testing.refAllDecls(@This());
+}
+
+const t = testing;
+test "JsonString" {
+	const str = try std.json.stringifyAlloc(t.allocator, .{
+		.data = jsonString("{\"over\": 9000}"),
+	}, .{});
+	defer t.allocator.free(str);
+	try t.expectEqual("{\"data\":{\"over\": 9000}}", str);
 }

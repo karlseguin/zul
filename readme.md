@@ -171,6 +171,17 @@ defer managed.deinit();
 const search_result = managed.value;
 ```
 
+## [zul.JsonString](https://www.goblgobl.com/zul/json_string/)
+Allows the embedding of already-encoded JSON strings into objects in order to avoid double encoded values.
+
+```zig
+const an_encoded_json_value = "{\"over\": 9000}";
+const str = try std.json.stringifyAlloc(allocator, .{
+	.name = "goku,
+	.power = zul.jsonString(an_encoded_json_value),
+}, .{});
+```
+
 ## [zul.pool](https://www.goblgobl.com/zul/pool/)
 A thread-safe object pool which will dynamically grow when empty and revert to the configured size.
 
