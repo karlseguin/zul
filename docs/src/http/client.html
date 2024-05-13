@@ -166,11 +166,52 @@ fn getResponse(
 	opts: .{
 		// whether or not to parse the respons headers
 		.response_headers: bool = true,
+
+		.write_progress_state: *anyopaque = undefined,
+
+		.write_progress: ?*const fn(total: usize, written: usize, state: *anyopaque) void = null,
 	}
 ) !Response
 {% endhighlight %}
 		<div class=desc>
-			<p>Issues the requests and, on success, returns the <code><a href="#Response">Response</a></code>. </p>
+			<p>Issues the requests and, on success, returns the <code><a href="#Response">Response</a></code>.</p>
+
+			<p>The <code>write_progress</code> option field is a callback that will be called as the file body is uploaded. An optional state can be specified via the <code>write_progress_state</code> the option field which is passed into the callback.</p>
+
+{% highlight zig %}
+var res = try req.getResponse(.{
+	.write_progress = uploadProgress
+});
+
+// ...
+
+fn uploadProgress(total: usize, written: usize, state: *anyopaque) void {
+	// It is an undefined behavior to try to access the state
+	// when `write_progress_state` was not specified.
+	_ = state;
+
+	std.fmt.print("Written {d} of {d}", {written, total});
+}
+{% endhighlight %}
+
+		<p>Or, with state:</p>
+
+{% highlight zig %}
+// ProgressTracker can be anything, it's specific to your app
+var tracker = ProgressTracker{};
+
+var res = try req.getResponse(.{
+	.write_progress = uploadProgress
+	.write_progress_state = &tracker,
+});
+
+// ...
+
+fn uploadProgress(total: usize, written: usize, state: *anyopaque) void {
+	var tracker: *ProgressTracker = @alignCast(@ptrCast(state));
+	// use tracker however you want, it's your class!
+}
+{% endhighlight %}
 		</div>
 	</div>
 </div>

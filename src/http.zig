@@ -134,12 +134,14 @@ pub const Request = struct {
 
 	pub const Opts = struct{
 		response_headers: bool = true,
+		write_progress_state: *anyopaque = undefined,
+		write_progress: ?*const fn(total: usize, written: usize, state: *anyopaque) void = null,
 	};
 
 	pub fn getResponse(self: *Request, opts: Opts) !Response {
 		const have_body = std.meta.activeTag(self._body) != .none;
 
-		// this is currently handled poorly by std.Client, so
+		// this is currently handled poorly by std.Client, so...
 		if (have_body and !self.method.requestHasBody()) {
 			return error.MethodCannotHaveBody;
 		}
@@ -163,16 +165,20 @@ pub const Request = struct {
 		});
 		var req = &self._req.?;
 
+		var content_length: ?usize = null;
 		var file: ?std.fs.File = null;
 		switch (self._body) {
-			.str => |str| req.transfer_encoding = .{.content_length = str.len},
+			.str => |str| content_length = str.len,
 			.file => |file_path| {
 				var f = try std.fs.cwd().openFile(file_path, .{});
-				const stat = try f.stat();
-				req.transfer_encoding = .{.content_length = stat.size};
 				file = f;
+				content_length = (try f.stat()).size;
 			},
 			else => {},
+		}
+
+		if (content_length) |cl| {
+			req.transfer_encoding = .{.content_length = cl};
 		}
 
 		defer {
@@ -186,8 +192,23 @@ pub const Request = struct {
 			.file => {
 				var f = file.?;
 				try f.seekTo(0);
-				var fifo = std.fifo.LinearFifo(u8, .{ .Static = 4096 }).init();
-				try fifo.pump(f.reader(), req.writer());
+
+				var writer = req.writer();
+				var buf: [4096]u8 = undefined;
+				const progress = opts.write_progress;
+
+				var written: usize = 0;
+				while (true) {
+					const n = try f.read(&buf);
+					if (n == 0) {
+						break;
+					}
+					try writer.writeAll(buf[0..n]);
+					if (progress) |p| {
+						written += n;
+						p(content_length.?, written, opts.write_progress_state);
+					}
+				}
 			},
 			else => {},
 		}
@@ -403,6 +424,54 @@ test "http.Request: body" {
 		try t.expectEqual("a file for testing recursive fs iterator\n", m.value.body);
 	}
 
+	for (testAbsoluteAndRelative("tests/large")) |file_path| {
+		{
+			var req = try client.request("http://127.0.0.1:6370/echo");
+			req.method = .POST;
+			defer req.deinit();
+			req.streamFile(file_path);
+
+			var res = try req.getResponse(.{});
+			const m = try res.json(TestEcho, t.allocator, .{});
+			defer m.deinit();
+			try t.expectEqual("10043", res.header("REQ-content-length").?);
+			try t.expectEqual("aaa", m.value.body[0..3]);
+			try t.expectEqual("zzz\n", m.value.body[10039..]);
+		}
+
+		{
+			// with stateful progress hook
+			var req = try client.request("http://127.0.0.1:6370/echo");
+			req.method = .POST;
+			defer req.deinit();
+			req.streamFile(file_path);
+
+			var pt = ProgressTracker{};
+			var res = try req.getResponse(.{.write_progress = writeProgress, .write_progress_state = &pt});
+			const m = try res.json(TestEcho, t.allocator, .{});
+			defer m.deinit();
+			try t.expectEqual("10043", res.header("REQ-content-length").?);
+			try t.expectEqual(4096, pt.written[0]);
+			try t.expectEqual(8192, pt.written[1]);
+			try t.expectEqual(10043, pt.written[2]);
+		}
+
+		{
+			noProgressCalls = 0;
+			// with statelss progress hook
+			var req = try client.request("http://127.0.0.1:6370/echo");
+			req.method = .POST;
+			defer req.deinit();
+			req.streamFile(file_path);
+
+			var res = try req.getResponse(.{.write_progress = writeProgressNoState});
+			const m = try res.json(TestEcho, t.allocator, .{});
+			defer m.deinit();
+			try t.expectEqual("10043", res.header("REQ-content-length").?);
+			try t.expectEqual(3, noProgressCalls);
+		}
+	}
+
 	{
 		// single field
 		var req = try client.request("http://127.0.0.1:6370/echo");
@@ -584,7 +653,7 @@ fn startTestServer() !std.Thread {
 					header_count += 1;
 				}
 
-				const req_body = try (try req.reader()).readAllAlloc(allocator, 4096);
+				const req_body = try (try req.reader()).readAllAlloc(allocator, 16_384);
 				const res = try std.json.stringifyAlloc(allocator, .{
 					.url = req.head.target,
 					.method = req.head.method,
@@ -614,4 +683,28 @@ fn testAbsoluteAndRelative(relative: []const u8) [2][]const u8 {
 		allocator.dupe(u8, relative) catch unreachable,
 		std.fs.cwd().realpathAlloc(allocator, relative) catch unreachable,
 	};
+}
+
+const ProgressTracker = struct {
+	pos: usize = 0,
+	written: [3]usize = undefined,
+};
+
+fn writeProgress(total: usize, written: usize, state: *anyopaque) void {
+	std.debug.assert(total == 10043);
+	var pt: *ProgressTracker = @alignCast(@ptrCast(state));
+	pt.written[pt.pos] = written;
+	pt.pos += 1;
+}
+
+var noProgressCalls: usize = 0;
+fn writeProgressNoState(total: usize, written: usize, _: *anyopaque) void {
+	std.debug.assert(total == 10043);
+	switch (noProgressCalls) {
+		0 => std.debug.assert(written == 4096),
+		1 => std.debug.assert(written == 8192),
+		2 => std.debug.assert(written == 10043),
+		else => unreachable,
+	}
+	noProgressCalls += 1;
 }
