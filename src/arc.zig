@@ -17,6 +17,11 @@ pub fn LockRefArenaArc(comptime T: type) type {
 			ref: Self,
 			arena: Allocator,
 			value_ptr: *T,
+
+			// should only be called in failure cases
+			pub fn deinit(self: *CreateResult) void {
+				self.ref.deinit();
+			}
 		};
 
 		pub fn create(allocator: Allocator) !CreateResult {
@@ -44,7 +49,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
 		pub fn acquire(self: *Self) *Value {
 			self.mutex.lock();
 			var value = self.value;
-			_ = @atomicRmw(usize, &value._rc, .Add, 1, .monotonic);
+			value.acquire();
 			self.mutex.unlock();
 			return value;
 		}
@@ -55,8 +60,14 @@ pub fn LockRefArenaArc(comptime T: type) type {
 			arena: Allocator,
 
 			// should only be called in if something bad happens
-			fn deinit(self: *NewResult) void {
+			pub fn deinit(self: *NewResult) void {
 				self._value.release();
+			}
+
+			pub fn acquire(self: *NewResult) *Value {
+				var value = self._value;
+				value.acquire();
+				return value;
 			}
 		};
 
@@ -102,6 +113,10 @@ pub fn ArenaArc(comptime T: type) type {
 			return self;
 		}
 
+		pub fn acquire(self: *Self) void {
+			_ = @atomicRmw(usize, &self._rc, .Add, 1, .monotonic);
+		}
+
 		pub fn release(self: *Self) void {
 			// returns the value before the sub, so if the value before the sub was 1,
 			// it means we no longer have anything referencing this
@@ -134,16 +149,23 @@ test "LockRefArenaArc: basic" {
 			try t.expectEqual("hello", arc2.value);
 		}
 
-		const new = try ref.new();
-		new.value_ptr.*= try new.arena.dupe(u8, "world");
-		ref.swap(new);
+		const new1 = try ref.new();
+		new1.value_ptr.*= try new1.arena.dupe(u8, "world");
+		ref.swap(new1);
 
 		const arc3 = ref.acquire();
 		defer arc3.release();
 		try t.expectEqual("world", arc3.value);
 
+		var new2 = try ref.new();
+		new2.value_ptr.*= try new2.arena.dupe(u8, "!!!");
+		ref.swap(new2);
+
+		const arc4 = new2.acquire();
+		defer arc4.release();
+		try t.expectEqual("!!!", arc4.value);
+
 		// this reference should still be valid
 		try t.expectEqual("hello", arc1.value);
-
 	}
 }
