@@ -5,16 +5,16 @@ pub fn build(b: *std.Build) !void {
 	const optimize = b.standardOptimizeOption(.{});
 		// Expose this as a module that others can import
 	_ = b.addModule("zul", .{
-		.root_source_file = .{ .path = "src/zul.zig" },
+		.root_source_file = b.path("src/zul.zig"),
 	});
 
 	{
 		// test step
 		const lib_test = b.addTest(.{
-			.root_source_file = .{ .path = "src/zul.zig" },
+			.root_source_file = b.path("src/zul.zig"),
 			.target = target,
 			.optimize = optimize,
-			.test_runner = .{.path = "test_runner.zig"},
+			.test_runner = b.path("test_runner.zig"),
 		});
 
 		const run_test = b.addRunArtifact(lib_test);
