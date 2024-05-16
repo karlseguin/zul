@@ -8,7 +8,8 @@ pub const Date = struct {
 	day: u8,
 
 	pub const Format = enum {
-		iso8601
+		iso8601,
+		rfc3339,
 	};
 
 	pub fn init(year: i16, month: u8, day: u8) !Date {
@@ -45,6 +46,7 @@ pub const Date = struct {
 		var parser = Parser.init(input);
 
 		const date = switch (fmt) {
+			.rfc3339 => try parser.rfc3339Date(),
 			.iso8601 => try parser.iso8601Date(),
 		};
 
@@ -91,7 +93,7 @@ pub const Date = struct {
 		_ = options;
 
 		switch (try source.nextAlloc(allocator, .alloc_if_needed)) {
-			inline .string, .allocated_string => |str| return Date.parse(str, .iso8601) catch return error.InvalidCharacter,
+			inline .string, .allocated_string => |str| return Date.parse(str, .rfc3339) catch return error.InvalidCharacter,
 			else => return error.UnexpectedToken,
 		}
 	}
@@ -282,7 +284,7 @@ pub const DateTime = struct {
 	pub fn parseRFC3339(input: []const u8) !DateTime {
 		var parser = Parser.init(input);
 
-		const dt = try parser.iso8601Date();
+		const dt = try parser.rfc3339Date();
 
 		const year = dt.year;
 		if (year < -4712 or year > 9999) {
@@ -641,6 +643,29 @@ const Parser = struct {
 		const day = self.paddedInt(u8, 2) orelse return error.InvalidDate;
 		return Date.init(if (negative) -year else year, month, day);
 	}
+
+	fn rfc3339Date(self: *Parser) !Date {
+		const len = self.unconsumed();
+		if (len < 10) {
+			return error.InvalidDate;
+		}
+
+		const negative = self.consumeIf('-');
+		const year = self.paddedInt(i16, 4) orelse return error.InvalidDate;
+
+		if (self.consumeIf('-') == false) {
+			return error.InvalidDate;
+		}
+
+		const month = self.paddedInt(u8, 2) orelse return error.InvalidDate;
+
+		if (self.consumeIf('-') == false) {
+			return error.InvalidDate;
+		}
+
+		const day = self.paddedInt(u8, 2) orelse return error.InvalidDate;
+		return Date.init(if (negative) -year else year, month, day);
+	}
 };
 
 const t = @import("zul.zig").testing;
@@ -699,80 +724,102 @@ test "Date: parse ISO8601" {
 		try t.expectEqual(Date{.year = 1, .month = 2, .day = 3}, try Date.parse("00010203", .iso8601));
 		try t.expectEqual(Date{.year = -1, .month = 2, .day = 3}, try Date.parse("-00010203", .iso8601));
 	}
+}
 
+test "Date: parse RFC339" {
 	{
-		// invalid format
-		try t.expectError(error.InvalidDate, Date.parse("", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023/01-02", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-01/02", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("0001-01-01 ", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-1-02", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-01-2", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("9-01-2", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("99-01-2", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("999-01-2", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("-999-01-2", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("-1-01-2", .iso8601));
+		//valid YYYY-MM-DD
+		try t.expectEqual(Date{.year = 2023, .month = 5, .day = 22}, try Date.parse("2023-05-22", .rfc3339));
+		try t.expectEqual(Date{.year = -2023, .month = 2, .day = 3}, try Date.parse("-2023-02-03", .rfc3339));
+		try t.expectEqual(Date{.year = 1, .month = 2, .day = 3}, try Date.parse("0001-02-03", .rfc3339));
+		try t.expectEqual(Date{.year = -1, .month = 2, .day = 3}, try Date.parse("-0001-02-03", .rfc3339));
 	}
 
 	{
-		// invalid month
-		try t.expectError(error.InvalidDate, Date.parse("2023-00-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-0A-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-13-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-99-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("-2023-00-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("-2023-13-22", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("-2023-99-22", .iso8601));
+		//valid YYYYMMDD
+		try t.expectError(error.InvalidDate, Date.parse("20230522", .rfc3339));
+		try t.expectError(error.InvalidDate, Date.parse("-20230203", .rfc3339));
+		try t.expectError(error.InvalidDate, Date.parse("00010203", .rfc3339));
+		try t.expectError(error.InvalidDate, Date.parse("-00010203", .rfc3339));
 	}
+}
 
-	{
-		// invalid day
-		try t.expectError(error.InvalidDate, Date.parse("2023-01-00", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-01-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-02-29", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-03-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-04-31", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-05-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-06-31", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-07-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-08-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-09-31", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-10-32", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-11-31", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2023-12-32", .iso8601));
-	}
+test "Date: parse invalid common" {
+	for (&[_]Date.Format{.rfc3339, .iso8601}) |format| {
+		{
+			// invalid format
+			try t.expectError(error.InvalidDate, Date.parse("", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023/01-02", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-01/02", format));
+			try t.expectError(error.InvalidDate, Date.parse("0001-01-01 ", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-1-02", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-01-2", format));
+			try t.expectError(error.InvalidDate, Date.parse("9-01-2", format));
+			try t.expectError(error.InvalidDate, Date.parse("99-01-2", format));
+			try t.expectError(error.InvalidDate, Date.parse("999-01-2", format));
+			try t.expectError(error.InvalidDate, Date.parse("-999-01-2", format));
+			try t.expectError(error.InvalidDate, Date.parse("-1-01-2", format));
+		}
 
-	{
-		// valid (max day)
-		try t.expectEqual(Date{.year = 2023, .month = 1, .day = 31}, try Date.parse("2023-01-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 2, .day = 28}, try Date.parse("2023-02-28", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 3, .day = 31}, try Date.parse("2023-03-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 4, .day = 30}, try Date.parse("2023-04-30", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 5, .day = 31}, try Date.parse("2023-05-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 6, .day = 30}, try Date.parse("2023-06-30", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 7, .day = 31}, try Date.parse("2023-07-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 8, .day = 31}, try Date.parse("2023-08-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 9, .day = 30}, try Date.parse("2023-09-30", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 10, .day = 31}, try Date.parse("2023-10-31", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 11, .day = 30}, try Date.parse("2023-11-30", .iso8601));
-		try t.expectEqual(Date{.year = 2023, .month = 12, .day = 31}, try Date.parse("2023-12-31", .iso8601));
-	}
+		{
+			// invalid month
+			try t.expectError(error.InvalidDate, Date.parse("2023-00-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-0A-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-13-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-99-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("-2023-00-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("-2023-13-22", format));
+			try t.expectError(error.InvalidDate, Date.parse("-2023-99-22", format));
+		}
 
-	{
-		// leap years
-		try t.expectEqual(Date{.year = 2000, .month = 2, .day = 29}, try Date.parse("2000-02-29", .iso8601));
-		try t.expectEqual(Date{.year = 2400, .month = 2, .day = 29}, try Date.parse("2400-02-29", .iso8601));
-		try t.expectEqual(Date{.year = 2012, .month = 2, .day = 29}, try Date.parse("2012-02-29", .iso8601));
-		try t.expectEqual(Date{.year = 2024, .month = 2, .day = 29}, try Date.parse("2024-02-29", .iso8601));
+		{
+			// invalid day
+			try t.expectError(error.InvalidDate, Date.parse("2023-01-00", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-01-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-02-29", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-03-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-04-31", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-05-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-06-31", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-07-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-08-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-09-31", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-10-32", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-11-31", format));
+			try t.expectError(error.InvalidDate, Date.parse("2023-12-32", format));
+		}
 
-		try t.expectError(error.InvalidDate, Date.parse("2000-02-30", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2400-02-30", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2012-02-30", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2024-02-30", .iso8601));
+		{
+			// valid (max day)
+			try t.expectEqual(Date{.year = 2023, .month = 1, .day = 31}, try Date.parse("2023-01-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 2, .day = 28}, try Date.parse("2023-02-28", format));
+			try t.expectEqual(Date{.year = 2023, .month = 3, .day = 31}, try Date.parse("2023-03-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 4, .day = 30}, try Date.parse("2023-04-30", format));
+			try t.expectEqual(Date{.year = 2023, .month = 5, .day = 31}, try Date.parse("2023-05-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 6, .day = 30}, try Date.parse("2023-06-30", format));
+			try t.expectEqual(Date{.year = 2023, .month = 7, .day = 31}, try Date.parse("2023-07-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 8, .day = 31}, try Date.parse("2023-08-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 9, .day = 30}, try Date.parse("2023-09-30", format));
+			try t.expectEqual(Date{.year = 2023, .month = 10, .day = 31}, try Date.parse("2023-10-31", format));
+			try t.expectEqual(Date{.year = 2023, .month = 11, .day = 30}, try Date.parse("2023-11-30", format));
+			try t.expectEqual(Date{.year = 2023, .month = 12, .day = 31}, try Date.parse("2023-12-31", format));
+		}
 
-		try t.expectError(error.InvalidDate, Date.parse("2100-02-29", .iso8601));
-		try t.expectError(error.InvalidDate, Date.parse("2200-02-29", .iso8601));
+		{
+			// leap years
+			try t.expectEqual(Date{.year = 2000, .month = 2, .day = 29}, try Date.parse("2000-02-29", format));
+			try t.expectEqual(Date{.year = 2400, .month = 2, .day = 29}, try Date.parse("2400-02-29", format));
+			try t.expectEqual(Date{.year = 2012, .month = 2, .day = 29}, try Date.parse("2012-02-29", format));
+			try t.expectEqual(Date{.year = 2024, .month = 2, .day = 29}, try Date.parse("2024-02-29", format));
+
+			try t.expectError(error.InvalidDate, Date.parse("2000-02-30", format));
+			try t.expectError(error.InvalidDate, Date.parse("2400-02-30", format));
+			try t.expectError(error.InvalidDate, Date.parse("2012-02-30", format));
+			try t.expectError(error.InvalidDate, Date.parse("2024-02-30", format));
+
+			try t.expectError(error.InvalidDate, Date.parse("2100-02-29", format));
+			try t.expectError(error.InvalidDate, Date.parse("2200-02-29", format));
+		}
 	}
 }
 
@@ -1338,18 +1385,6 @@ test "DateTime: parse RFC3339" {
 	}
 
 	{
-		const dt = try DateTime.parse("20230102T23:59:58.987654321Z", .rfc3339);
-		try t.expectEqual(1672703998987654, dt.micros);
-		try t.expectEqual(2023, dt.date().year);
-		try t.expectEqual(1, dt.date().month);
-		try t.expectEqual(2, dt.date().day);
-		try t.expectEqual(23, dt.time().hour);
-		try t.expectEqual(59, dt.time().min);
-		try t.expectEqual(58, dt.time().sec);
-		try t.expectEqual(987654, dt.time().micros);
-	}
-
-	{
 		// invalid format
 		try t.expectError(error.InvalidDate, DateTime.parse("", .rfc3339));
 		try t.expectError(error.InvalidDate, DateTime.parse("2023/01-02T00:00Z", .rfc3339));
@@ -1365,6 +1400,9 @@ test "DateTime: parse RFC3339" {
 		try t.expectError(error.InvalidDate, DateTime.parse("-999-01-2T00:00Z", .rfc3339));
 		try t.expectError(error.InvalidDate, DateTime.parse("-1-01-2T00:00Z", .rfc3339));
 	}
+
+	// date portion is ISO8601
+	try t.expectError(error.InvalidDate, DateTime.parse("20230102T23:59:58.987654321Z", .rfc3339));
 
 	{
 		// invalid month

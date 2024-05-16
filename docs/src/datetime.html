@@ -105,7 +105,7 @@ fn initUTC(
 </div>
 
 <h2 id=Date><a href=#Date aria-hidden=true>Date struct</a></h2>
-<p><code>zul.Date</code> represents a year, month and day. It is serialized and parsed to JSON or using <code>std.fmt</code> using the <code>YYYY-MM-DD</code> format (i.e. ISO8601).</p>
+<p><code>zul.Date</code> represents a year, month and day. It is serialized and parsed to JSON or using <code>std.fmt</code> using the <code>YYYY-MM-DD</code> format (i.e. RFC3339).</p>
 
 <h3 id=Date.fields><a href=#Date.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -138,7 +138,7 @@ fn initUTC(
 	<div class=member>
 		<code class=name id=Date.parse><a href=#Date.parse aria-hidden=true>parse(str: []const u8, format: Format) !Date</a></code>
 		<div class=desc>
-			<p>Parses the string representation of a date. Currently, the only supported format is <code>.iso8601</code>.</p>
+			<p>Parses the string representation of a date. Supported formats are <code>.rfc3339</code> and <code>.iso8601</code>.</p>
 		</div>
 	</div>
 	<div class=member>
