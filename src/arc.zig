@@ -3,90 +3,112 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
-// This API is weird, and I'm still playing with it.
 pub fn LockRefArenaArc(comptime T: type) type {
+	// FullArgs is a tuple that represents the arguments to T.init(...)
+	// The first argument to T.init must always be an Allocator (something we enforce here)
+	// But, when the init(...) and setValue(...) methods of this struct are called
+	// we don't expect FullArgs. We expect something like FullArgs[1..], that is,
+	// the arguments without the allocator. This is because we'll inject an arena
+	// allocator into the args within init/setValue.
+	// Thus, Args, more or less, FullArgs[1..], but we can't just do FullArgs[1..]
+	// we need to build a new Struct.
+	const FullArgs = std.meta.ArgsTuple(@TypeOf(T.init));
+	const full_fields = std.meta.fields(FullArgs);
+	const ARG_COUNT = full_fields.len;
+
+	if (ARG_COUNT == 0 or full_fields[0].type != std.mem.Allocator) {
+		@compileError("The first argument to " ++ @typeName(T) ++ ".init must be an std.mem.Allocator");
+	}
+
+	var arg_fields: [full_fields.len - 1]std.builtin.Type.StructField = undefined;
+	inline for (full_fields[1..], 0..) |field, index| {
+		arg_fields[index] = field;
+		// shift the name down by 1
+		// so if our FullArgs is (allocator: Allocator, id: usize)
+		//                        0                      1
+		// then our Args will be (id: usize)
+		//                        0
+		arg_fields[index].name = std.fmt.comptimePrint("{d}", .{index});
+	}
+
+	const Args = @Type(.{
+		.Struct = .{
+			.layout = .auto,
+			.is_tuple = true,
+			.fields = &arg_fields,
+			.decls = &[_]std.builtin.Type.Declaration{},
+		},
+	});
+
 	return struct {
-		value: *Value,
+		arc: *Arc,
 		allocator: Allocator,
 		mutex: std.Thread.Mutex,
 
 		const Self = @This();
-		pub const Value = ArenaArc(T);
+		pub const Arc = ArenaArc(T);
 
-		const CreateResult = struct {
-			ref: Self,
-			arena: Allocator,
-			value_ptr: *T,
-
-			// should only be called in failure cases
-			pub fn deinit(self: *CreateResult) void {
-				self.ref.deinit();
-			}
-		};
-
-		pub fn create(allocator: Allocator) !CreateResult {
-			const value = try Value.create(allocator);
-
-			const ref = .{
-				.mutex = .{},
-				.value = value,
-				.allocator = allocator,
-			};
-
+		pub fn init(allocator: Allocator, args: Args) !Self {
 			return .{
-				.ref = ref,
-				.value_ptr = &value.value,
-				.arena = value._arena.allocator(),
+				.mutex = .{},
+				.allocator = allocator,
+				.arc = try createArc(allocator, args),
 			};
 		}
 
 		pub fn deinit(self: *Self) void {
 			self.mutex.lock();
-			self.value.release();
+			self.arc.release();
 			self.mutex.unlock();
 		}
 
-		pub fn acquire(self: *Self) *Value {
+		pub fn acquire(self: *Self) *Arc {
 			self.mutex.lock();
-			var value = self.value;
-			value.acquire();
-			self.mutex.unlock();
-			return value;
+			defer self.mutex.unlock();
+			var arc = self.arc;
+			arc.acquire();
+			return arc;
 		}
 
-		const NewResult = struct {
-			_value: *Value,
-			value_ptr: *T,
-			arena: Allocator,
-
-			// should only be called in if something bad happens
-			pub fn deinit(self: *NewResult) void {
-				self._value.release();
-			}
-
-			pub fn acquire(self: *NewResult) *Value {
-				var value = self._value;
-				value.acquire();
-				return value;
-			}
-		};
-
-		pub fn new(self: *const Self) !NewResult {
-			const value = try Value.create(self.allocator);
-			return .{
-				._value = value,
-				.value_ptr = &value.value,
-				.arena = value._arena.allocator(),
-			};
-		}
-
-		pub fn swap(self: *Self, n: NewResult) void {
+		pub fn setValue(self: *Self, args: Args) !void {
+			const arc = try createArc(self.allocator, args);
 			self.mutex.lock();
-			var existing = self.value;
-			self.value = n._value;
+			var existing = self.arc;
+			self.arc = arc;
 			self.mutex.unlock();
-
 			existing.release();
+		}
+
+		fn createArc(allocator: Allocator, args: Args) !*Arc {
+			const arena = try allocator.create(ArenaAllocator);
+			errdefer allocator.destroy(arena);
+
+			arena.* = std.heap.ArenaAllocator.init(allocator);
+			errdefer arena.deinit();
+
+			const aa = arena.allocator();
+			// args doesn't contain our allocator
+			// we're going to push the arc.arena.allocator at the head of args
+			// which means creating a new args and copying the values over
+			var full_args: FullArgs = undefined;
+			full_args[0] = aa;
+			inline for (1..ARG_COUNT) |i| {
+				full_args[i] = args[i-1];
+			}
+
+			const arc = try aa.create(Arc);
+			arc.* = .{
+				._rc = 1,
+				.arena = arena,
+				.value = try @call(.auto, T.init, full_args),
+			};
+			return arc;
+		}
+
+		pub fn jsonStringify(self: *Self, jws: anytype) !void {
+			var arc = self.acquire();
+			defer arc.release();
+			return jws.write(arc.value);
 		}
 	};
 }
@@ -94,24 +116,10 @@ pub fn LockRefArenaArc(comptime T: type) type {
 pub fn ArenaArc(comptime T: type) type {
 	return struct {
 		value: T,
+		arena: *ArenaAllocator,
 		_rc: usize,
-		_arena: ArenaAllocator,
 
 		const Self = @This();
-
-		fn create(allocator: Allocator) !*Self {
-			var arena = ArenaAllocator.init(allocator);
-			errdefer arena.deinit();
-
-			const self = try arena.allocator().create(Self);
-			self.* = .{
-				._rc = 1,
-				._arena = arena,
-				.value = undefined,
-			};
-
-			return self;
-		}
 
 		pub fn acquire(self: *Self) void {
 			_ = @atomicRmw(usize, &self._rc, .Add, 1, .monotonic);
@@ -121,51 +129,51 @@ pub fn ArenaArc(comptime T: type) type {
 			// returns the value before the sub, so if the value before the sub was 1,
 			// it means we no longer have anything referencing this
 			if (@atomicRmw(usize, &self._rc, .Sub, 1, .monotonic) == 1) {
-				self._arena.deinit();
+				const arena = self.arena;
+				const allocator = self.arena.child_allocator;
+				arena.deinit();
+				allocator.destroy(arena);
 			}
+		}
+
+		pub fn jsonStringify(self: *const Self, jws: anytype) !void {
+			return jws.write(self.value);
 		}
 	};
 }
 
 const t = @import("zul.zig").testing;
-test "LockRefArenaArc: basic" {
+test "LockRefArenaArc" {
 	{
-		var create = try LockRefArenaArc([]const u8).create(t.allocator);
-		defer create.ref.deinit();
+		var ref = try LockRefArenaArc(TestValue).init(t.allocator, .{"test"});
+		ref.deinit();
 	}
 
+	var ref = try LockRefArenaArc(TestValue).init(t.allocator, .{"hello"});
+	defer ref.deinit();
+
+	// keep this one around and re-test it at the end, it should still be valid
+	// and still be the same value
+	const arc1 = ref.acquire();
+	defer arc1.release();
+	try t.expectEqual("hello", arc1.value.str);
+
+	try ref.setValue(.{"world"});
+
 	{
-		var create = try LockRefArenaArc([]const u8).create(t.allocator);
-		var ref = create.ref;
-		defer ref.deinit();
-		create.value_ptr.* = try create.arena.dupe(u8, "hello");
-
-		const arc1 = ref.acquire();
-		defer arc1.release();
-
-		{
-			const arc2 = ref.acquire();
-			defer arc2.release();
-			try t.expectEqual("hello", arc2.value);
-		}
-
-		const new1 = try ref.new();
-		new1.value_ptr.*= try new1.arena.dupe(u8, "world");
-		ref.swap(new1);
-
-		const arc3 = ref.acquire();
-		defer arc3.release();
-		try t.expectEqual("world", arc3.value);
-
-		var new2 = try ref.new();
-		new2.value_ptr.*= try new2.arena.dupe(u8, "!!!");
-		ref.swap(new2);
-
-		const arc4 = new2.acquire();
-		defer arc4.release();
-		try t.expectEqual("!!!", arc4.value);
-
-		// this reference should still be valid
-		try t.expectEqual("hello", arc1.value);
+		const arc2 = ref.acquire();
+		defer arc2.release();
+		try t.expectEqual("world", arc2.value.str);
 	}
+
+	// this reference should still be valid
+	try t.expectEqual("hello", arc1.value.str);
 }
+
+const TestValue = struct {
+	str: []const u8,
+
+	fn init(allocator: Allocator, original: []const u8) !TestValue {
+		return .{.str = try allocator.dupe(u8, original)};
+	}
+};
