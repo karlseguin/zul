@@ -43,7 +43,7 @@ const host = args.get("host") orelse "127.0.0.1";
 
 <p>Single-dash keys can be grouped together, with the last key being given the value, so parameters like <code>./run -xvf file.tar.gz</code> work like you (probably) expect.</p>
 
-<p>One the parser runs into a non key+value combo, all following arguments are treated as a "tail", which is a list of <code>[]const u8</code></p>
+<p>Once the parser runs into a non key+value combo, all following arguments are treated as a "tail", which is a list of <code>[]const u8</code></p>
 
 <h3 id=CommandLineArgs.fields><a href=#CommandLineArgs.fields aria-hidden=true>Fields</a></h3>
 <div>
@@ -62,7 +62,7 @@ const host = args.get("host") orelse "127.0.0.1";
 	<div class=member>
 		<code class=name>list: [][]const u8</code>
 		<div class=desc>
-			<p>A list of arguments. The first argument in the list is the path to the running executable. This is an exact collection of iterating through the result of <code>std.process.argsWithAllocator</code>.</p>
+			<p>A list of arguments. The first argument in the list is the path to the running executable. This is an exact collection of <code>std.process.argsWithAllocator</code>.</p>
 		</div>
 	</div>
 </div>
@@ -72,7 +72,7 @@ const host = args.get("host") orelse "127.0.0.1";
 	<div class=member>
 		<code class=name id=CommandLineArgs.parse><a href=#CommandLineArgs.parse aria-hidden=true>parse(allocator: std.mem.Allocator) !CommandLineArgs</a></code>
 		<div class=desc>
-			<p>Parses the command line arguments This can only fail in exceptional cases. Can only fail in exceptional cases (e.g. out of memory).</p>
+			<p>Parses the command line arguments This can only fail in exceptional cases (e.g. out of memory).</p>
 		</div>
 	</div>
 	<div class=member>
@@ -94,7 +94,7 @@ const host = args.get("host") orelse "127.0.0.1";
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=CommandLineArgs.count><a href=#CommandLineArgs.count aria-hidden=true>contains(self: *const CommandLineArgs) u32</a></code>
+		<code class=name id=CommandLineArgs.count><a href=#CommandLineArgs.count aria-hidden=true>count(self: *const CommandLineArgs) u32</a></code>
 		<div class=desc>
 			<p>The number of key value pairs. <code>args.count() + args.tail.len + 1 == args.list.len</code>. The <code>+ 1</code> is for the path to the running executable which is included in <code>list</code>.</p>
 		</div>

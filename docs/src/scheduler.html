@@ -9,7 +9,7 @@ title: zul.Scheduler
 <h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
 {% highlight zig %}
 // Where multiple types of tasks can be scheduled using the same schedule,
-//  a tagged union is ideal.
+// a tagged union is ideal.
 const Task = union(enum) {
 	say: []const u8,
 
@@ -36,7 +36,7 @@ var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();
 
 // Starts the scheduler, launching a new thread
-// We pass start our context. Since we have a null context
+// We pass our context. Since we have a null context
 // we pass a null value, i.e. {}
 try s.start({});
 

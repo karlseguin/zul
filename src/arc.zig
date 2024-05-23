@@ -56,6 +56,27 @@ pub fn LockRefArenaArc(comptime T: type) type {
 			};
 		}
 
+		pub fn initWithValue(allocator: Allocator, value: T) !Self {
+			const arena = try allocator.create(ArenaAllocator);
+			errdefer allocator.destroy(arena);
+
+			arena.* = std.heap.ArenaAllocator.init(allocator);
+			errdefer arena.deinit();
+
+			const arc = try arena.allocator().create(Arc);
+			arc.* = .{
+				._rc = 1,
+				.arena = arena,
+				.value = value,
+			};
+
+			return .{
+				.arc = arc,
+				.mutex = .{},
+				.allocator = allocator,
+			};
+		}
+
 		pub fn deinit(self: *Self) void {
 			self.mutex.lock();
 			self.arc.release();
@@ -168,6 +189,15 @@ test "LockRefArenaArc" {
 
 	// this reference should still be valid
 	try t.expectEqual("hello", arc1.value.str);
+}
+
+test "LockRefArenaArc: initWithValue" {
+	var ref = try LockRefArenaArc(TestValue).initWithValue(t.allocator, .{.str = "teg"});
+	defer ref.deinit();
+
+	const arc1 = ref.acquire();
+	defer arc1.release();
+	try t.expectEqual("teg", arc1.value.str);
 }
 
 const TestValue = struct {
