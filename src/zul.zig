@@ -11,6 +11,7 @@ pub const Scheduler = @import("scheduler.zig").Scheduler;
 pub const ThreadPool = @import("thread_pool.zig").ThreadPool;
 pub const StringBuilder = @import("string_builder.zig").StringBuilder;
 pub const CommandLineArgs = @import("command_line_args.zig").CommandLineArgs;
+pub const LockRefArc = @import("arc.zig").LockRefArc;
 pub const LockRefArenaArc = @import("arc.zig").LockRefArenaArc;
 
 const datetime = @import("datetime.zig");

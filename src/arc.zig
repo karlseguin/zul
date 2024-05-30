@@ -46,7 +46,6 @@ pub fn LockRefArenaArc(comptime T: type) type {
 		mutex: std.Thread.Mutex,
 
 		const Self = @This();
-		pub const Arc = ArenaArc(T);
 
 		pub fn init(allocator: Allocator, args: Args) !Self {
 			return .{
@@ -63,7 +62,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
 			arena.* = std.heap.ArenaAllocator.init(allocator);
 			errdefer arena.deinit();
 
-			const arc = try arena.allocator().create(Arc);
+			const arc = try arena.allocator().create(Self.Arc);
 			arc.* = .{
 				._rc = 1,
 				.arena = arena,
@@ -131,46 +130,123 @@ pub fn LockRefArenaArc(comptime T: type) type {
 			defer arc.release();
 			return jws.write(arc.value);
 		}
+
+		pub const Arc = struct {
+			value: T,
+			arena: *ArenaAllocator,
+			_rc: usize,
+
+			pub fn acquire(self: *Arc) void {
+				_ = @atomicRmw(usize, &self._rc, .Add, 1, .monotonic);
+			}
+
+			pub fn release(self: *Arc) void {
+				// returns the value before the sub, so if the value before the sub was 1,
+				// it means we no longer have anything referencing this
+				if (@atomicRmw(usize, &self._rc, .Sub, 1, .monotonic) == 1) {
+					const arena = self.arena;
+					const allocator = self.arena.child_allocator;
+					arena.deinit();
+					allocator.destroy(arena);
+				}
+			}
+
+			pub fn jsonStringify(self: *const Arc, jws: anytype) !void {
+				return jws.write(self.value);
+			}
+		};
 	};
 }
 
-pub fn ArenaArc(comptime T: type) type {
+pub fn LockRefArc(comptime T: type) type {
 	return struct {
-		value: T,
-		arena: *ArenaAllocator,
-		_rc: usize,
+		arc: *Arc,
+		allocator: Allocator,
+		mutex: std.Thread.Mutex,
 
 		const Self = @This();
 
-		pub fn acquire(self: *Self) void {
-			_ = @atomicRmw(usize, &self._rc, .Add, 1, .monotonic);
+		pub fn init(allocator: Allocator, value: T) !Self {
+			return .{
+				.mutex = .{},
+				.allocator = allocator,
+				.arc = try createArc(allocator, value),
+			};
 		}
 
-		pub fn release(self: *Self) void {
-			// returns the value before the sub, so if the value before the sub was 1,
-			// it means we no longer have anything referencing this
-			if (@atomicRmw(usize, &self._rc, .Sub, 1, .monotonic) == 1) {
-				const arena = self.arena;
-				const allocator = self.arena.child_allocator;
-				arena.deinit();
-				allocator.destroy(arena);
+		pub fn deinit(self: *Self) void {
+			self.mutex.lock();
+			self.arc.release();
+			self.mutex.unlock();
+		}
+
+		pub fn acquire(self: *Self) *Arc {
+			self.mutex.lock();
+			defer self.mutex.unlock();
+			var arc = self.arc;
+			arc.acquire();
+			return arc;
+		}
+
+		pub fn setValue(self: *Self, value: T) !void {
+			const arc = try createArc(self.allocator, value);
+			self.mutex.lock();
+			var existing = self.arc;
+			self.arc = arc;
+			self.mutex.unlock();
+			existing.release();
+		}
+
+		fn createArc(allocator: Allocator, value: T) !*Self.Arc {
+			const arc = try allocator.create(Self.Arc);
+			arc.* = .{
+				._rc = 1,
+				.value = value,
+				.allocator = allocator,
+			};
+			return arc;
+		}
+
+		pub fn jsonStringify(self: *Self, jws: anytype) !void {
+			var arc = self.acquire();
+			defer arc.release();
+			return jws.write(arc.value);
+		}
+
+		pub const Arc = struct {
+			value: T,
+			allocator: Allocator,
+			_rc: usize,
+
+			pub fn acquire(self: *Arc) void {
+				_ = @atomicRmw(usize, &self._rc, .Add, 1, .monotonic);
 			}
-		}
 
-		pub fn jsonStringify(self: *const Self, jws: anytype) !void {
-			return jws.write(self.value);
-		}
+			pub fn release(self: *Arc) void {
+				// returns the value before the sub, so if the value before the sub was 1,
+				// it means we no longer have anything referencing this
+				if (@atomicRmw(usize, &self._rc, .Sub, 1, .monotonic) == 1) {
+					const allocator = self.allocator;
+					allocator.destroy(self);
+				}
+			}
+
+			pub fn jsonStringify(self: *const Arc, jws: anytype) !void {
+				return jws.write(self.value);
+			}
+		};
 	};
 }
+
 
 const t = @import("zul.zig").testing;
 test "LockRefArenaArc" {
 	{
-		var ref = try LockRefArenaArc(TestValue).init(t.allocator, .{"test"});
+		var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, .{"test"});
 		ref.deinit();
 	}
 
-	var ref = try LockRefArenaArc(TestValue).init(t.allocator, .{"hello"});
+	var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, .{"hello"});
 	defer ref.deinit();
 
 	// keep this one around and re-test it at the end, it should still be valid
@@ -192,7 +268,7 @@ test "LockRefArenaArc" {
 }
 
 test "LockRefArenaArc: initWithValue" {
-	var ref = try LockRefArenaArc(TestValue).initWithValue(t.allocator, .{.str = "teg"});
+	var ref = try LockRefArenaArc(TestArenaValue).initWithValue(t.allocator, .{.str = "teg"});
 	defer ref.deinit();
 
 	const arc1 = ref.acquire();
@@ -200,10 +276,42 @@ test "LockRefArenaArc: initWithValue" {
 	try t.expectEqual("teg", arc1.value.str);
 }
 
-const TestValue = struct {
+
+test "LockRefArc" {
+	{
+		var ref = try LockRefArc(TestValue).init(t.allocator, .{.str = "test"});
+		ref.deinit();
+	}
+
+	var ref = try LockRefArc(TestValue).init(t.allocator, .{.str = "hello"});
+	defer ref.deinit();
+
+	// keep this one around and re-test it at the end, it should still be valid
+	// and still be the same value
+	const arc1 = ref.acquire();
+	defer arc1.release();
+	try t.expectEqual("hello", arc1.value.str);
+
+	try ref.setValue(.{.str = "world"});
+
+	{
+		const arc2 = ref.acquire();
+		defer arc2.release();
+		try t.expectEqual("world", arc2.value.str);
+	}
+
+	// this reference should still be valid
+	try t.expectEqual("hello", arc1.value.str);
+}
+
+const TestArenaValue = struct {
 	str: []const u8,
 
-	fn init(allocator: Allocator, original: []const u8) !TestValue {
+	fn init(allocator: Allocator, original: []const u8) !TestArenaValue {
 		return .{.str = try allocator.dupe(u8, original)};
 	}
+};
+
+const TestValue = struct {
+	str: []const u8,
 };
