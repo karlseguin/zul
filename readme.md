@@ -7,6 +7,50 @@ Full documentation is available at: [https://www.goblgobl.com/zul/](https://www.
 
 (This readme is auto-generated from [docs/src/readme.njk](https://github.com/karlseguin/zul/blob/master/docs/src/readme.njk))
 
+## Usage
+In your build.zig.zon add a reference to Zul:
+
+```zig
+.{
+  .name = "my-app",
+  .paths = .{""},
+  .version = "0.0.0",
+  .dependencies = .{
+    .zul = .{
+      .url = "https://github.com/karlseguin/zul/archive/master.tar.gz",
+      .hash = "$INSERT_HASH_HERE"
+    },
+  },
+}
+```
+
+To get the hash, run:
+
+```bash
+zig fetch https://github.com/karlseguin/zul/archive/master.tar.gz
+```
+
+Instead of `master` you can always use a specific commit.
+
+Next, in your `build.zig`, you should already have an executable, something like:
+
+```zig
+const exe = b.addExecutable(.{
+    .name = "my-app",
+    .root_source_file = b.path("src/main.zig"),
+    .target = target,
+    .optimize = optimize,
+});
+```
+
+Add the following line:
+
+```zig
+exe.root_module.addImport("zul", b.dependency("zul", .{}).module("zul"));
+```
+
+You can now `const zul = @import("zul");` in your project.
+
 ## [zul.benchmark.run](https://www.goblgobl.com/zul/benchmark/)
 Simple benchmarking function.
 
@@ -225,7 +269,7 @@ Ephemeral thread-based task scheduler used to run tasks at a specific time.
 
 ```zig
 // Where multiple types of tasks can be scheduled using the same schedule,
-//  a tagged union is ideal.
+// a tagged union is ideal.
 const Task = union(enum) {
 	say: []const u8,
 
@@ -252,7 +296,7 @@ var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();
 
 // Starts the scheduler, launching a new thread
-// We pass start our context. Since we have a null context
+// We pass our context. Since we have a null context
 // we pass a null value, i.e. {}
 try s.start({});
 
