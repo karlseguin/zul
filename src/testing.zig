@@ -126,7 +126,7 @@ pub fn reset() void {
 }
 
 pub const Random = struct {
-	var instance: ?std.rand.DefaultPrng = null;
+	var instance: ?std.Random.DefaultPrng = null;
 
 	pub fn bytes(min: usize, max: usize) []u8 {
 		var r = random();
@@ -153,11 +153,11 @@ pub const Random = struct {
 		return r.intRangeAtMost(T, min, max);
 	}
 
-	pub fn random() std.rand.Random {
+	pub fn random() std.Random {
 		if (instance == null) {
 			var seed: u64 = undefined;
 			std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
-			instance = std.rand.DefaultPrng.init(seed);
+			instance = std.Random.DefaultPrng.init(seed);
 		}
 		return instance.?.random();
 	}
