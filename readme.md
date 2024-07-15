@@ -30,7 +30,7 @@ To get the hash, run:
 zig fetch https://github.com/karlseguin/zul/archive/master.tar.gz
 ```
 
-Instead of `master` you can always use a specific commit.
+Instead of `master` you can use a specific commit/tag.
 
 Next, in your `build.zig`, you should already have an executable, something like:
 
