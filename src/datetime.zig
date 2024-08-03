@@ -1004,12 +1004,12 @@ test "Time: order" {
 test "DateTime: initUTC" {
 	// GO
 	// for i := 0; i < 100; i++ {
-	// 	us := rand.Int63n(31536000000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(%d, (try DateTime.initUTC(%d, %d, %d, %d, %d, %d, %d)).micros);\n", us, date.Year(), date.Month(), date.Day(), date.Hour(), date.Minute(), date.Second(), date.Nanosecond()/1000)
+	//   us := rand.Int63n(31536000000000000)
+	//   if i%2 == 1 {
+	//     us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(%d, (try DateTime.initUTC(%d, %d, %d, %d, %d, %d, %d)).micros);\n", us, date.Year(), date.Month(), date.Day(), date.Hour(), date.Minute(), date.Second(), date.Nanosecond()/1000)
 	// }
 	try t.expectEqual(31185488490276150, (try DateTime.initUTC(2958, 3, 25, 3, 41, 30, 276150)).micros);
 	try t.expectEqual(-17564653328342207, (try DateTime.initUTC(1413, 5, 26, 9, 37, 51, 657793)).micros);
@@ -1126,12 +1126,12 @@ test "DateTime: date" {
 
 	// GO:
 	// for i := 0; i < 100; i++ {
-	// 	us := rand.Int63n(31536000000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(Date{.year = %d, .month = %d, .day = %d}, DateTime.fromUnix(%d, .seconds).date());\n", date.Year(), date.Month(), date.Day(), date.Unix())
+	//   us := rand.Int63n(31536000000000000)
+	//   if i%2 == 1 {
+	//     us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(Date{.year = %d, .month = %d, .day = %d}, DateTime.fromUnix(%d, .seconds).date());\n", date.Year(), date.Month(), date.Day(), date.Unix())
 	// }
 	try t.expectEqual(Date{.year = 2438, .month = 8, .day = 8}, (try DateTime.fromUnix(14787635606, .seconds)).date());
 	try t.expectEqual(Date{.year = 1290, .month = 10, .day = 9}, (try DateTime.fromUnix(-21434368940, .seconds)).date());
@@ -1238,12 +1238,12 @@ test "DateTime: date" {
 test "DateTime: time" {
 	// GO:
 	// for i := 0; i < 100; i++ {
-	// 	us := rand.Int63n(31536000000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(Time{.hour = %d, .min = %d, .sec = %d, .micros = %d}, (try DateTime.fromUnix(%d, .microseconds)).time());\n", date.Hour(), date.Minute(), date.Second(), date.Nanosecond()/1000, us)
+	//   us := rand.Int63n(31536000000000000)
+	//   if i%2 == 1 {
+	//      us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(Time{.hour = %d, .min = %d, .sec = %d, .micros = %d}, (try DateTime.fromUnix(%d, .microseconds)).time());\n", date.Hour(), date.Minute(), date.Second(), date.Nanosecond()/1000, us)
 	// }
 	try t.expectEqual(Time{.hour = 18, .min = 56, .sec = 18, .micros = 38399}, (try DateTime.fromUnix(6940752978038399, .microseconds)).time());
 	try t.expectEqual(Time{.hour = 14, .min = 10, .sec = 48, .micros = 481799}, (try DateTime.fromUnix(-15037004951518201, .microseconds)).time());
@@ -1638,12 +1638,12 @@ test "DateTime: unix" {
 	// microseconds
 	// GO:
 	// for i := 0; i < 50; i++ {
-	// 	us := rand.Int63n(3153600000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.microseconds));\n", us, date.Format(time.RFC3339Nano))
+	//   us := rand.Int63n(3153600000000000)
+	//   if i%2 == 1 {
+	//      us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.microseconds));\n", us, date.Format(time.RFC3339Nano))
 	// }
 	try t.expectEqual(2568689002670356, (try DateTime.parse("2051-05-26T04:43:22.670356Z", .rfc3339)).unix(.microseconds));
 	try t.expectEqual(-2994122503199268, (try DateTime.parse("1875-02-13T19:18:16.800732Z", .rfc3339)).unix(.microseconds));
@@ -1699,12 +1699,12 @@ test "DateTime: unix" {
 	// milliseconds
 	// GO
 	// for i := 0; i < 50; i++ {
-	// 	us := rand.Int63n(3153600000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.milliseconds));\n", us/1000, date.Format(time.RFC3339Nano))
+	//   us := rand.Int63n(3153600000000000)
+	//   if i%2 == 1 {
+	//      us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.milliseconds));\n", us/1000, date.Format(time.RFC3339Nano))
 	// }
 	try t.expectEqual(1397526377500, (try DateTime.parse("2014-04-15T01:46:17.500928Z", .rfc3339)).unix(.milliseconds));
 	try t.expectEqual(-586731476093, (try DateTime.parse("1951-05-30T03:02:03.906951Z", .rfc3339)).unix(.milliseconds));
@@ -1760,12 +1760,12 @@ test "DateTime: unix" {
 	// seconds
 	// GO
 	// for i := 0; i < 50; i++ {
-	// 	us := rand.Int63n(3153600000000000)
-	// 	if i%2 == 1 {
-	// 		us = -us
-	// 	}
-	// 	date := time.UnixMicro(us).UTC()
-	// 	fmt.Printf("	try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.milliseconds));\n", us/1000/1000, date.Format(time.RFC3339Nano))
+	//   us := rand.Int63n(3153600000000000)
+	//   if i%2 == 1 {
+	//      us = -us
+	//   }
+	//   date := time.UnixMicro(us).UTC()
+	//   fmt.Printf("try t.expectEqual(%d, (try DateTime.parse(\"%s\", .rfc3339)).unix(.milliseconds));\n", us/1000/1000, date.Format(time.RFC3339Nano))
 	// }
 	try t.expectEqual(1019355037, (try DateTime.parse("2002-04-21T02:10:37.264298Z", .rfc3339)).unix(.seconds));
 	try t.expectEqual(-2639191098, (try DateTime.parse("1886-05-14T19:21:41.481076Z", .rfc3339)).unix(.seconds));
