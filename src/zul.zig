@@ -20,49 +20,49 @@ pub const Time = datetime.Time;
 pub const DateTime = datetime.DateTime;
 
 pub fn Managed(comptime T: type) type {
-	return struct {
-		value: T,
-		arena: *std.heap.ArenaAllocator,
+    return struct {
+        value: T,
+        arena: *std.heap.ArenaAllocator,
 
-		const Self = @This();
+        const Self = @This();
 
-		pub fn fromJson(parsed: std.json.Parsed(T)) Self {
-			return  .{
-				.arena = parsed.arena,
-				.value = parsed.value,
-			};
-		}
+        pub fn fromJson(parsed: std.json.Parsed(T)) Self {
+            return .{
+                .arena = parsed.arena,
+                .value = parsed.value,
+            };
+        }
 
-		pub fn deinit(self: Self) void {
-			const arena = self.arena;
-			const allocator = arena.child_allocator;
-			arena.deinit();
-			allocator.destroy(arena);
-		}
-	};
+        pub fn deinit(self: Self) void {
+            const arena = self.arena;
+            const allocator = arena.child_allocator;
+            arena.deinit();
+            allocator.destroy(arena);
+        }
+    };
 }
 
 pub fn jsonString(raw: []const u8) JsonString {
-	return .{.raw = raw};
+    return .{ .raw = raw };
 }
 
 pub const JsonString = struct {
-	raw: []const u8,
+    raw: []const u8,
 
-	pub fn jsonStringify(self: JsonString, jws: anytype) !void {
-		return jws.print("{s}", .{self.raw});
-	}
+    pub fn jsonStringify(self: JsonString, jws: anytype) !void {
+        return jws.print("{s}", .{self.raw});
+    }
 };
 
 test {
-	@import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDecls(@This());
 }
 
 const t = testing;
 test "JsonString" {
-	const str = try std.json.stringifyAlloc(t.allocator, .{
-		.data = jsonString("{\"over\": 9000}"),
-	}, .{});
-	defer t.allocator.free(str);
-	try t.expectEqual("{\"data\":{\"over\": 9000}}", str);
+    const str = try std.json.stringifyAlloc(t.allocator, .{
+        .data = jsonString("{\"over\": 9000}"),
+    }, .{});
+    defer t.allocator.free(str);
+    try t.expectEqual("{\"data\":{\"over\": 9000}}", str);
 }
