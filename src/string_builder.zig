@@ -255,7 +255,7 @@ pub const StringBuilder = struct {
     }
 
     fn writeIntT(self: *StringBuilder, comptime T: type, value: T, endian: Endian) !void {
-        const l = @divExact(@typeInfo(T).Int.bits, 8);
+        const l = @divExact(@typeInfo(T).int.bits, 8);
         try self.ensureUnusedCapacity(l);
         const pos = self.pos;
         writeIntInto(T, self.buf, pos, value, l, endian);
@@ -269,8 +269,8 @@ pub const StringBuilder = struct {
     pub fn writeIntAs(self: *StringBuilder, value: anytype, endian: Endian) !void {
         const T = @TypeOf(value);
         switch (@typeInfo(T)) {
-            .ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
-            .Int => |int| {
+            .comptime_int => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
+            .int => |int| {
                 if (int.signedness == .signed) {
                     switch (int.bits) {
                         8 => return self.writeByte(value),
@@ -452,7 +452,7 @@ pub const View = struct {
     }
 
     fn writeIntT(self: *View, comptime T: type, value: T, endian: Endian) void {
-        const l = @divExact(@typeInfo(T).Int.bits, 8);
+        const l = @divExact(@typeInfo(T).int.bits, 8);
         const pos = self.pos;
         writeIntInto(T, self.sb.buf, pos, value, l, endian);
         self.pos = pos + l;
@@ -465,8 +465,8 @@ pub const View = struct {
     pub fn writeIntAs(self: *View, value: anytype, endian: Endian) void {
         const T = @TypeOf(value);
         switch (@typeInfo(T)) {
-            .ComptimeInt => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
-            .Int => |int| {
+            .comptime_int => @compileError("Writing a comptime_int is slightly ambiguous, please cast to a specific type: sb.writeInt(@as(i32, 9001))"),
+            .int => |int| {
                 if (int.signedness == .signed) {
                     switch (int.bits) {
                         8 => return self.writeByte(value),

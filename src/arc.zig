@@ -32,7 +32,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
     }
 
     const Args = @Type(.{
-        .Struct = .{
+        .@"struct" = .{
             .layout = .auto,
             .is_tuple = true,
             .fields = &arg_fields,

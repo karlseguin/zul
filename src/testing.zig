@@ -6,23 +6,23 @@ const builtin = @import("builtin");
 // https://github.com/ziglang/zig/issues/4437
 pub fn expectEqual(expected: anytype, actual: anytype) !void {
     switch (@typeInfo(@TypeOf(actual))) {
-        .Array => |arr| if (arr.child == u8) {
+        .array => |arr| if (arr.child == u8) {
             return std.testing.expectEqualStrings(expected, &actual);
         },
-        .Pointer => |ptr| if (ptr.child == u8) {
+        .pointer => |ptr| if (ptr.child == u8) {
             return std.testing.expectEqualStrings(expected, actual);
         } else if (comptime isStringArray(ptr.child)) {
             return std.testing.expectEqualStrings(expected, actual);
         } else if (ptr.child == []u8 or ptr.child == []const u8) {
             return expectStrings(expected, actual);
         },
-        .Struct => |structType| {
+        .@"struct" => |structType| {
             inline for (structType.fields) |field| {
                 try expectEqual(@field(expected, field.name), @field(actual, field.name));
             }
             return;
         },
-        .Union => |union_info| {
+        .@"union" => |union_info| {
             if (union_info.tag_type == null) {
                 @compileError("Unable to compare untagged union values");
             }
@@ -53,7 +53,7 @@ fn expectStrings(expected: []const []const u8, actual: anytype) !void {
 }
 
 fn isStringArray(comptime T: type) bool {
-    if (!is(.Array)(T) and !isPtrTo(.Array)(T)) {
+    if (!is(.array)(T) and !isPtrTo(.array)(T)) {
         return false;
     }
     return std.meta.Elem(T) == u8;
@@ -80,8 +80,8 @@ pub fn isPtrTo(comptime id: std.builtin.TypeId) TraitFn {
 }
 
 pub fn isSingleItemPtr(comptime T: type) bool {
-    if (comptime is(.Pointer)(T)) {
-        return @typeInfo(T).Pointer.size == .One;
+    if (comptime is(.pointer)(T)) {
+        return @typeInfo(T).pointer.size == .One;
     }
     return false;
 }
