@@ -122,7 +122,6 @@ pub const UUID = struct {
 
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !UUID {
         const hex = try std.json.innerParse([]const u8, allocator, source, options);
-
         return UUID.parse(hex) catch error.UnexpectedToken;
     }
 
@@ -288,6 +287,12 @@ test "uuid: json" {
     }, .{}, out.writer());
 
     try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", out.items);
+
+    const S = struct{uuid: UUID};
+    const parsed = try std.json.parseFromSlice(S, t.allocator, out.items, .{});
+    defer parsed.deinit();
+
+    try t.expectEqual("938b1cd2-f479-442b-9ba6-59ebf441e695", &parsed.value.uuid.toHex(.lower));
 }
 
 test "uuid: format" {

@@ -108,11 +108,9 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         // this is running in a separate thread, started by start()
         fn run(self: *Self, ctx: C) void {
             self.mutex.lock();
-            defer std.debug.print("scheduler exit\n", .{});
 
             while (true) {
                 const ms_until_next = self.processPending(ctx);
-                std.debug.print("{?}\n", .{ms_until_next});
 
                 // mutex is locked when returning for processPending
 
