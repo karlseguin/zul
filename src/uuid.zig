@@ -120,6 +120,13 @@ pub const UUID = struct {
         try out.print("{s}", .{hex});
     }
 
+    pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !UUID {
+        const hex = try std.json.innerParse([]const u8, allocator, source, options);
+
+        return UUID.parse(hex) catch error.UnexpectedToken;
+    }
+
+
     pub fn format(self: UUID, comptime layout: []const u8, options: fmt.FormatOptions, out: anytype) !void {
         _ = options;
 
