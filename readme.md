@@ -290,7 +290,7 @@ const Task = union(enum) {
 
 ...
 
-// This example doesn't use a app-context, so we specify it's
+// This example doesn't use a app-context, so we specify its
 // type as void
 var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();

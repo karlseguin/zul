@@ -20,6 +20,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         thread: ?Thread,
 
         const Q = std.PriorityQueue(Job(T), void, compare);
+        const include_scheduler = @typeInfo(@TypeOf(T.run)).@"fn".params.len == 4;
 
         fn compare(_: void, a: Job(T), b: Job(T)) std.math.Order {
             return std.math.order(a.at, b.at);
@@ -154,7 +155,11 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
                 const job = self.queue.remove();
                 self.mutex.unlock();
                 defer self.mutex.lock();
-                job.task.run(ctx, next.at);
+                if (comptime include_scheduler) {
+                    job.task.run(ctx, self, next.at);
+                } else {
+                    job.task.run(ctx, next.at);
+                }
             }
         }
     };

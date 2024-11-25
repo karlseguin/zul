@@ -30,7 +30,7 @@ const Task = union(enum) {
 
 ...
 
-// This example doesn't use a app-context, so we specify it's
+// This example doesn't use a app-context, so we specify its
 // type as void
 var s = zul.Scheduler(Task, void).init(allocator);
 defer s.deinit();
@@ -52,7 +52,22 @@ try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
 
 <p>The scheduler runs in its own thread (started by calling <code>start()</code>). Importantly, tasks are run within the scheduler thread and thus can delay each other. Consider having your tasks use <a href={{ env.baseURL }}/thread_pool>zul.ThreadPool</a> in more advanced cases.</p>
 
-<p>Tasks are not persisted (e.g. if the schedule or program crashes, scheduled jobs are lost). Otherwise, the scheduler never discards a task. Tasks that were scheduled in the past are run normally. Applications that care about stale tasks can use the 2nd parameter passed to <code>T.run</code> which is the original scheduled timestamp (in milliseconds).</p>
+<p>Tasks are not persisted (e.g. if the schedule or program crashes, scheduled jobs are lost). Otherwise, the scheduler never discards a task. Tasks that were scheduled in the past are run normally. Applications that care about stale tasks can use the last parameter passed to <code>T.run</code> which is the original scheduled timestamp (in milliseconds).</p>
+
+<h3 id=T.run><a href=#T.run aria-hidden=true>T.run</a></h3>
+<p><code>T</code> must have a <code>run</code> method. Two variants are supported:</p>
+
+<div class=member>
+	<code class=name id=R.run.3><a href=#T.run.3 aria-hidden=true>run(task: T, ctx: C, at: i64) void</a></code>
+	<div class=desc>
+		<p>Run when a task is ready to be executed. <code>ctx</code> is the arbitrary data passed to <code>start</code>. <code>at</code> is the timestamp, in millisecond, that the task was supposed to run at.</p>
+	</div>
+
+	<code class=name id=R.run.4><a href=#T.run.4 aria-hidden=true>run(task: T, ctx: C, scheduler: *zul.Scheduler(T), at: i64) void</a></code>
+	<div class=desc>
+		<p>Same as above, but receives an additional parameter: the scheduler itself. This can be useful if you want to have recurring tasks: <code>run</code> can re-schedule the task.</p>
+	</div>
+</div>
 
 <h3 id=Scheduler.methods><a href=#Scheduler.methods aria-hidden=true>Methods</a></h3>
 <div>
