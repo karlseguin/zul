@@ -1,0 +1,44 @@
+---
+layout: site.njk
+title: zul.sort
+---
+
+<h1 id=zul.sort><a href=#zul.sort aria-hidden=true>zul.sort</a></h1>
+<p>Helpers for sorting strings and integers</p>
+
+<h2 id=example><a href=#example aria-hidden=true>Example</a></h2>
+{% highlight zig %}
+// sorting strings based on their bytes
+var values = [_][]const u8{"ABC", "abc", "Dog", "Cat", "horse", "chicken"};
+zul.sort.strings(&values, .asc);
+
+// sort ASCII strings, ignoring case
+zul.sort.asciiIgnoreCase(&values, .desc);
+
+// sort integers or floats
+var numbers = [_]i32{10, -20, 33, 0, 2, 6};
+zul.sort.numbers(i32, &numbers, .asc);
+{% endhighlight %}
+
+
+<h3 id=sort.functions><a href=#sort.functions aria-hidden=true>Functions</a></h3>
+<div>
+	<div class=member>
+		<code class=name id=strings>sort.strings(values: [][]const u8, direction: Direction) void</code>
+		<div class=desc>
+			<p>Sorts the values in-place using byte-comparison. The sort is unstable (i.e. there is no guarantee about how duplicate values are ordered with respect to each other). Direction can be <code>.asc</code> or <code>.desc</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=strings>sort.asciiIgnoreCase(values: [][]const u8, direction: Direction) void</code>
+		<div class=desc>
+			<p>Sorts the values in-place, ignoring ASCII casing. The sort is unstable (i.e. there is no guarantee about how duplicate values are ordered with respect to each other). Direction can be <code>.asc</code> or <code>.desc</code></p>
+		</div>
+	</div>
+	<div class=member>
+		<code class=name id=strings>sort.number(comptime T: type, values: []T, direction: Direction) void</code>
+		<div class=desc>
+			<p>Sorts the values in-place. The sort is unstable (i.e. there is no guarantee about how duplicate values are ordered with respect to each other). Direction can be <code>.asc</code> or <code>.desc</code>. <code>T</code> must be an integer or float type (i.e. <code>i32</code>, <code>f64</code>).</p>
+		</div>
+	</div>
+</div>

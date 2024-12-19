@@ -307,6 +307,22 @@ try s.scheduleIn(.{.say = "world"}, std.time.ms_per_s * 5);
 try s.schedule(.{.say = "hello"},  std.time.milliTimestamp() + 100);
 ```
 
+## [zul.sort](https://www.goblgobl.com/zul/sort/)
+Helpers for sorting strings and integers
+
+```zig
+// sorting strings based on their bytes
+var values = [_][]const u8{"ABC", "abc", "Dog", "Cat", "horse", "chicken"};
+zul.sort.strings(&values, .asc);
+
+// sort ASCII strings, ignoring case
+zul.sort.asciiIgnoreCase(&values, .desc);
+
+// sort integers or floats
+var numbers = [_]i32{10, -20, 33, 0, 2, 6};
+zul.sort.numbers(i32, &numbers, .asc);
+```
+
 ## [zul.StringBuilder](https://www.goblgobl.com/zul/string_builder/)
 Efficiently create/concat strings or binary data, optionally using a thread-safe pool with pre-allocated static buffers.
 

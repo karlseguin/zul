@@ -45,27 +45,28 @@ try std.json.stringify(.{.id = uuid3}, .{}, writer);
 		<div class=desc><p>Generate a version 4 (random) UUID.</p></div>
 	</div>
 	<div class=member>
-		<code class=name id=v4>UUID.v7() UUID</code>
+		<code class=name id=v7>UUID.v7() UUID</code>
 		<div class=desc><p>Generate a version 7 UUID.</p></div>
 	</div>
 	<div class=member>
 		<code class=name id=random>UUID.random() UUID</code>
 		<div class=desc>
-			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>UUID.v4()</a> or <a href=#v7>UUID.v7()</a> unless you have specific reasons not to.</div>
+			<p>Non-compliant pseudo-UUID. Does not have a version or variant. Use <a href=#v4>UUID.v4()</a> or <a href=#v7>UUID.v7()</a> unless you have specific reasons not to.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=random>UUID.parse(hex: []const u8) !UUID</code>
+		<code class=name id=parse>UUID.parse(hex: []const u8) !UUID</code>
 		<div class=desc>
-			<p>Attempts to parse a hex-encoded UUID. Returns <code>error.InvalidUUID</code> is the UUID is not valid.</div>
+			<p>Attempts to parse a hex-encoded UUID. Returns <code>error.InvalidUUID</code> is the UUID is not valid.</p>
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=random>UUID.bin2Hex(bin: []const u8, case: Case) ![36]iu8</code>
+		<code class=name id=bin2Hex>UUID.bin2Hex(bin: []const u8, case: Case) ![36]iu8</code>
 		<div class=desc>
-			<p>Hex encodes a 16 byte binary UUID.</div>
+			<p>Hex encodes a 16 byte binary UUID.</p>
 		</div>
 	</div>
+</div>
 <h3 id=UUID.methods><a href=#UUID.methods aria-hidden=true>Methods</a></h3>
 	<div class=member>
 		<code class=name id=UUID.toHex><a href=#UUID.toHex aria-hidden=true>toHex(uuid: UUID, case: Case) [36]u8</a></code>

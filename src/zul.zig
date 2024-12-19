@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const fs = @import("fs.zig");
+pub const sort = @import("sort.zig");
 pub const http = @import("http.zig");
 pub const pool = @import("pool.zig");
 pub const testing = @import("testing.zig");
