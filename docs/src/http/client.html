@@ -252,7 +252,7 @@ fn uploadProgress(total: usize, written: usize, state: *anyopaque) void {
 	<div class=member>
 		<code class=name id=Response.header><a href=#Response.header aria-hidden=true>fn header(self: *Response, name: []const u8) ?[]const u8</a></code>
 		<div class=desc>
-			<p>Returns the value associated with the given header <code>name</code>, if any. The name is case-insensitive. Only populated if the <code>response_headers</code> option is specified in <code>getResponse</code> (this option defaults to <code>true</code>).</p>
+			<p>Returns the value associated with the given header <code>name</code>, if any. The name is lower-case. Only populated if the <code>response_headers</code> option is specified in <code>getResponse</code> (this option defaults to <code>true</code>).</p>
 		</div>
 	</div>
 	<div class=member>

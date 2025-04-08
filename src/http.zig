@@ -217,11 +217,13 @@ pub const Request = struct {
         try req.wait();
 
         const res = &req.response;
-        var headers = std.StringHashMap([]const u8).init(self._arena.allocator());
+        const arena = self._arena.allocator();
+        var headers = std.StringHashMap([]const u8).init(arena);
         if (opts.response_headers == true) {
             var it = res.iterateHeaders();
             while (it.next()) |hdr| {
-                try headers.put(hdr.name, hdr.value);
+                const lower = try std.ascii.allocLowerString(arena, hdr.name);
+                try headers.put(lower, hdr.value);
             }
         }
 
@@ -242,6 +244,10 @@ pub const Response = struct {
 
     pub fn header(self: *const Response, name: []const u8) ?[]const u8 {
         return self.headers.get(name);
+    }
+
+    pub fn headerIterator(self: *const Response, name: []const u8) HeaderIterator {
+        return .{.name = name, .it = self.res.iterateHeaders()};
     }
 
     pub fn json(self: *const Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
@@ -279,6 +285,21 @@ pub const Response = struct {
         }
 
         return zul.StringBuilder.fromOwnedSlice(allocator, buf);
+    }
+};
+
+pub const HeaderIterator = struct {
+    it: std.http.HeaderIterator,
+    name: []const u8,
+
+    pub fn next(self: *HeaderIterator) ?[]const u8 {
+        const needle = self.name;
+        while (self.it.next()) |hdr| {
+            if (std.ascii.eqlIgnoreCase(needle, hdr.name)) {
+                return hdr.value;
+            }
+        }
+        return null;
     }
 };
 
@@ -326,22 +347,45 @@ test "http.Request: headers" {
 
     defer shutdownTestServer(&client, server_thread);
 
-    var req = try client.request("http://127.0.0.1:6370/echo");
-    defer req.deinit();
-    try req.header("R_1", "A Value");
-    try req.header("x-request-header", "value;2");
+    {
+        var req = try client.request("http://127.0.0.1:6370/echo");
+        defer req.deinit();
+        try req.header("R_1", "A Value");
+        try req.header("x-request-header", "value;2");
 
-    var res = try req.getResponse(.{});
-    try t.expectEqual(200, res.status);
-    const m = try res.json(TestEcho, t.allocator, .{});
-    defer m.deinit();
-    const echo = m.value;
-    try t.expectEqual("/echo", echo.url);
-    try t.expectEqual("GET", echo.method);
+        var res = try req.getResponse(.{});
+        try t.expectEqual(200, res.status);
+        const m = try res.json(TestEcho, t.allocator, .{});
+        defer m.deinit();
+        const echo = m.value;
+        try t.expectEqual("/echo", echo.url);
+        try t.expectEqual("GET", echo.method);
 
-    try t.expectEqual(null, res.header("REQ-OTHER"));
-    try t.expectEqual("A Value", res.header("REQ-R_1").?);
-    try t.expectEqual("value;2", res.header("REQ-x-request-header").?);
+        try t.expectEqual(null, res.header("req-other"));
+        try t.expectEqual("A Value", res.header("req-r_1").?);
+        try t.expectEqual("value;2", res.header("req-x-request-header").?);
+    }
+
+    {
+        var req = try client.request("http://127.0.0.1:6370/dupe_header");
+        defer req.deinit();
+
+        var res = try req.getResponse(.{});
+        try t.expectEqual(200, res.status);
+
+        try t.expectEqual("bb=22", res.header("set-cookie").?);
+        {
+            var it = res.headerIterator("fail");
+            try t.expectEqual(null, it.next());
+        }
+
+        {
+            var it = res.headerIterator("set-cookie");
+            try t.expectEqual("cc=11", it.next().?);
+            try t.expectEqual("bb=22", it.next().?);
+            try t.expectEqual(null, it.next());
+        }
+    }
 }
 
 test "http.Request: querystring" {
@@ -403,7 +447,7 @@ test "http.Request: body" {
         req.body("hello world!");
 
         var res = try req.getResponse(.{});
-        try t.expectEqual("12", res.header("REQ-content-length").?);
+        try t.expectEqual("12", res.header("req-content-length").?);
 
         const m = try res.json(TestEcho, t.allocator, .{});
         defer m.deinit();
@@ -420,7 +464,7 @@ test "http.Request: body" {
         var res = try req.getResponse(.{});
         const m = try res.json(TestEcho, t.allocator, .{});
         defer m.deinit();
-        try t.expectEqual("41", res.header("REQ-content-length").?);
+        try t.expectEqual("41", res.header("req-content-length").?);
         try t.expectEqual("a file for testing recursive fs iterator\n", m.value.body);
     }
 
@@ -434,7 +478,7 @@ test "http.Request: body" {
             var res = try req.getResponse(.{});
             const m = try res.json(TestEcho, t.allocator, .{});
             defer m.deinit();
-            try t.expectEqual("10043", res.header("REQ-content-length").?);
+            try t.expectEqual("10043", res.header("req-content-length").?);
             try t.expectEqual("aaa", m.value.body[0..3]);
             try t.expectEqual("zzz\n", m.value.body[10039..]);
         }
@@ -450,7 +494,7 @@ test "http.Request: body" {
             var res = try req.getResponse(.{ .write_progress = writeProgress, .write_progress_state = &pt });
             const m = try res.json(TestEcho, t.allocator, .{});
             defer m.deinit();
-            try t.expectEqual("10043", res.header("REQ-content-length").?);
+            try t.expectEqual("10043", res.header("req-content-length").?);
             try t.expectEqual(4096, pt.written[0]);
             try t.expectEqual(8192, pt.written[1]);
             try t.expectEqual(10043, pt.written[2]);
@@ -467,7 +511,7 @@ test "http.Request: body" {
             var res = try req.getResponse(.{ .write_progress = writeProgressNoState });
             const m = try res.json(TestEcho, t.allocator, .{});
             defer m.deinit();
-            try t.expectEqual("10043", res.header("REQ-content-length").?);
+            try t.expectEqual("10043", res.header("req-content-length").?);
             try t.expectEqual(3, noProgressCalls);
         }
     }
@@ -483,8 +527,8 @@ test "http.Request: body" {
         try req.formBody("a", "b");
 
         var res = try req.getResponse(.{});
-        try t.expectEqual("3", res.header("REQ-content-length").?);
-        try t.expectEqual("application/x-www-form-urlencoded", res.header("REQ-Content-Type").?);
+        try t.expectEqual("3", res.header("req-content-length").?);
+        try t.expectEqual("application/x-www-form-urlencoded", res.header("req-content-type").?);
 
         const m = try res.json(TestEcho, t.allocator, .{});
         defer m.deinit();
@@ -500,8 +544,8 @@ test "http.Request: body" {
         try req.formBody("year", ">= 2000");
 
         var res = try req.getResponse(.{});
-        try t.expectEqual("30", res.header("REQ-content-length").?);
-        try t.expectEqual("application/x-www-form-urlencoded", res.header("REQ-Content-Type").?);
+        try t.expectEqual("30", res.header("req-content-length").?);
+        try t.expectEqual("application/x-www-form-urlencoded", res.header("req-content-type").?);
 
         const m = try res.json(TestEcho, t.allocator, .{});
         defer m.deinit();
@@ -635,6 +679,18 @@ fn startTestServer() !std.Thread {
 
                 if (std.mem.eql(u8, "/hello", req.head.target) == true) {
                     try req.respond("hello", .{ .keep_alive = false });
+                    continue;
+                }
+
+                if (std.mem.eql(u8, "/dupe_header", req.head.target) == true) {
+                    try req.respond("hello", .{
+                        .keep_alive = false ,
+                        .extra_headers = &.{
+                            .{.name = "Set-Cookie", .value = "cc=11"},
+                            .{.name = "Set-Cookie", .value = "bb=22"},
+                            .{.name = "Other", .value = "value"},
+                        },
+                    });
                     continue;
                 }
 
