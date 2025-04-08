@@ -221,7 +221,19 @@ pub const Request = struct {
         if (opts.response_headers == true) {
             var it = res.iterateHeaders();
             while (it.next()) |hdr| {
-                try headers.put(hdr.name, hdr.value);
+                if (headers.get(hdr.name)) |prev_value| {
+                    var buf = try self._arena.allocator().alloc(u8, prev_value.len + hdr.value.len + 1);
+                    defer self._arena.allocator().free(prev_value);
+
+                    @memcpy(buf[0..prev_value.len], prev_value);
+                    buf[prev_value.len] = ',';
+                    @memcpy(buf[prev_value.len + 1 ..], hdr.value);
+
+                    try headers.put(hdr.name, buf);
+                } else {
+                    try headers.put(hdr.name, hdr.value);
+                }
+
             }
         }
 
