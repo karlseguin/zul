@@ -256,6 +256,20 @@ fn uploadProgress(total: usize, written: usize, state: *anyopaque) void {
 		</div>
 	</div>
 	<div class=member>
+		<code class=name id=Response.headerIterator><a href=#Response.headerIterator aria-hidden=true>fn headerIterator(self: *Response, name: []const u8) HeaderIterator</a></code>
+		<div class=desc>
+			<p>Returns an iterator to iterate over values of a given header. Useful for headers which may appear multiple times (i.e. set-cookie).</p>
+			<p>
+{% highlight zig %}
+var it = res.headerIterator("set-cookie");
+while (it.next()) |value| {
+	// ... value
+}
+{% endhighlight %}</p>
+			<p>To iterate over all values, use the <code>headerIterator</code> of the underlying <code>*std.http.Client.Response</code>, i.e.: <code>var it = res.res.headerIterator()</code></p>
+		</div>
+	</div>
+	<div class=member>
 		<code class=name id=Response.json><a href=#Response.json aria-hidden=true>fn json(...) !zul.Managed(T)</a></code>
 {% highlight zig %}
 fn json(
