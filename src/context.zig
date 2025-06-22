@@ -15,9 +15,8 @@ pub const Context = struct {
     allocator: Allocator,
     deadline_ns: ?i128, // Nanoseconds since epoch, null means no deadline
     cancelled: bool,
-    cancel_reason: ?[]const u8,
     parent: ?*const Context,
-    children: std.ArrayList(*Context),
+    children: std.ArrayListUnmanaged(*Context),
     mutex: std.Thread.Mutex,
 
     /// Create a new root context with optional deadline
@@ -26,9 +25,8 @@ pub const Context = struct {
             .allocator = allocator,
             .deadline_ns = deadline_ns,
             .cancelled = false,
-            .cancel_reason = null,
             .parent = null,
-            .children = std.ArrayList(*Context).init(allocator),
+            .children = std.ArrayListUnmanaged(*Context){},
             .mutex = std.Thread.Mutex{},
         };
     }
@@ -55,7 +53,7 @@ pub const Context = struct {
     }
 
     /// Create a child context from parent with optional new deadline
-    pub fn withParent(parent: *const Context, deadline_ns: ?i128) !*Context {
+    pub fn withParent(parent: *Context, deadline_ns: ?i128) !*Context {
         const child = try parent.allocator.create(Context);
         child.* = Context{
             .allocator = parent.allocator,
@@ -67,13 +65,17 @@ pub const Context = struct {
                 }
             } else parent.deadline_ns,
             .cancelled = false,
-            .cancel_reason = null,
             .parent = parent,
-            .children = std.ArrayList(*Context).init(parent.allocator),
+            .children = std.ArrayListUnmanaged(*Context){},
             .mutex = std.Thread.Mutex{},
         };
 
         // Add to parent's children list (this would need proper synchronization in real use)
+        parent.mutex.lock();
+        defer parent.mutex.unlock();
+
+        try parent.children.append(parent.allocator, child);
+
         return child;
     }
 
@@ -82,16 +84,13 @@ pub const Context = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        // Clean up children
-        for (self.children.items) |child| {
+        while (self.children.items.len > 0) {
+            const child = self.children.pop().?;
+            child.parent = null;
             child.deinit();
             self.allocator.destroy(child);
         }
-        self.children.deinit();
-
-        if (self.cancel_reason) |reason| {
-            self.allocator.free(reason);
-        }
+        self.children.deinit(self.allocator);
     }
 
     /// Internal const check for cancellation (no mutex, for parent checking)
@@ -135,21 +134,18 @@ pub const Context = struct {
         return null;
     }
 
-    /// Cancel the context with optional reason
-    pub fn cancel(self: *Context, reason: ?[]const u8) !void {
+    /// Cancel the context
+    pub fn cancel(self: *Context) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
         if (self.cancelled) return; // Already cancelled
 
         self.cancelled = true;
-        if (reason) |r| {
-            self.cancel_reason = try self.allocator.dupe(u8, r);
-        }
 
         // Cancel all children
         for (self.children.items) |child| {
-            try child.cancel("parent cancelled");
+            try child.cancel();
         }
     }
 
@@ -195,9 +191,7 @@ pub const Context = struct {
 };
 
 test "Context: basic creation and background context" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = Context.background(allocator);
     defer ctx.deinit();
@@ -211,9 +205,7 @@ test "Context: basic creation and background context" {
 }
 
 test "Context: with timeout creation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = try Context.withTimeout(allocator, 1000); // 1 second
     defer ctx.deinit();
@@ -230,9 +222,7 @@ test "Context: with timeout creation" {
 }
 
 test "Context: with deadline creation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     const future_deadline = time.nanoTimestamp() + (5000 * time.ns_per_ms); // 5 seconds from now
     var ctx = try Context.withDeadline(allocator, future_deadline);
@@ -245,9 +235,7 @@ test "Context: with deadline creation" {
 }
 
 test "Context: invalid deadline" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     const past_deadline = time.nanoTimestamp() - (1000 * time.ns_per_ms); // 1 second ago
     const result = Context.withDeadline(allocator, past_deadline);
@@ -255,16 +243,14 @@ test "Context: invalid deadline" {
 }
 
 test "Context: manual cancellation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = Context.background(allocator);
     defer ctx.deinit();
 
     try testing.expect(!ctx.isDone());
 
-    try ctx.cancel("test cancellation");
+    try ctx.cancel();
 
     try testing.expect(ctx.isCancelled());
     try testing.expect(ctx.isDone());
@@ -272,9 +258,7 @@ test "Context: manual cancellation" {
 }
 
 test "Context: deadline expiration" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     // Create context with very short timeout
     var ctx = try Context.withTimeout(allocator, 1); // 1ms
@@ -289,53 +273,39 @@ test "Context: deadline expiration" {
 }
 
 test "Context: parent-child relationship" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var parent = Context.background(allocator);
     defer parent.deinit();
 
     const future_deadline = time.nanoTimestamp() + (1000 * time.ns_per_ms);
     var child = try Context.withParent(&parent, future_deadline);
-    defer {
-        child.deinit();
-        allocator.destroy(child);
-    }
 
     try testing.expect(!child.isDone());
     try testing.expect(child.deadline_ns != null);
 
     // Cancel parent should affect child
-    try parent.cancel("parent cancelled");
+    try parent.cancel();
     try testing.expect(child.isCancelled());
     try testing.expect(child.isDone());
 }
 
 test "Context: child inherits parent deadline" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     const parent_deadline = time.nanoTimestamp() + (1000 * time.ns_per_ms);
     var parent = try Context.withDeadline(allocator, parent_deadline);
     defer parent.deinit();
 
     const child_deadline = time.nanoTimestamp() + (2000 * time.ns_per_ms); // Later than parent
-    var child = try Context.withParent(&parent, child_deadline);
-    defer {
-        child.deinit();
-        allocator.destroy(child);
-    }
+    const child = try Context.withParent(&parent, child_deadline);
 
     // Child should inherit parent's earlier deadline
     try testing.expectEqual(parent_deadline, child.deadline_ns.?);
 }
 
 test "Context: sleep with cancellation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = Context.background(allocator);
     defer ctx.deinit();
@@ -344,7 +314,7 @@ test "Context: sleep with cancellation" {
     const thread = try std.Thread.spawn(.{}, struct {
         fn cancelAfterDelay(context: *Context) void {
             time.sleep(10 * time.ns_per_ms); // 10ms delay
-            context.cancel("async cancel") catch {};
+            context.cancel() catch {};
         }
     }.cancelAfterDelay, .{&ctx});
     defer thread.join();
@@ -359,9 +329,7 @@ test "Context: sleep with cancellation" {
 }
 
 test "Context: sleep with deadline" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = try Context.withTimeout(allocator, 10); // 10ms timeout
     defer ctx.deinit();
@@ -377,9 +345,7 @@ test "Context: sleep with deadline" {
 }
 
 test "Context: remaining time calculation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = try Context.withTimeout(allocator, 100); // 100ms
     defer ctx.deinit();
@@ -396,9 +362,7 @@ test "Context: remaining time calculation" {
 }
 
 test "Context: wait for cancellation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = Context.background(allocator);
     defer ctx.deinit();
@@ -407,7 +371,7 @@ test "Context: wait for cancellation" {
     const thread = try std.Thread.spawn(.{}, struct {
         fn cancelAfterDelay(context: *Context) void {
             time.sleep(20 * time.ns_per_ms);
-            context.cancel("test") catch {};
+            context.cancel() catch {};
         }
     }.cancelAfterDelay, .{&ctx});
     defer thread.join();
@@ -417,9 +381,7 @@ test "Context: wait for cancellation" {
 }
 
 test "Context: wait timeout" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var ctx = Context.background(allocator);
     defer ctx.deinit();
@@ -433,24 +395,18 @@ test "Context: wait timeout" {
 }
 
 test "Context: nested cancellation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     var parent = Context.background(allocator);
     defer parent.deinit();
 
     var child = try Context.withParent(&parent, null);
-    defer {
-        child.deinit();
-        allocator.destroy(child);
-    }
 
     try testing.expect(!child.isCancelled());
     try testing.expect(!child.isDone());
 
     // Cancel parent
-    try parent.cancel("parent cancelled");
+    try parent.cancel();
 
     try testing.expect(child.isCancelled());
     try testing.expect(child.isDone());
