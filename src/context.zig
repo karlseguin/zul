@@ -12,8 +12,6 @@ pub const ContextError = error{
 
 /// Context provides deadline-based cancellation and timeout functionality
 pub const Context = struct {
-    const Self = @This();
-
     allocator: Allocator,
     deadline_ns: ?i128, // Nanoseconds since epoch, null means no deadline
     cancelled: bool,
@@ -23,8 +21,8 @@ pub const Context = struct {
     mutex: std.Thread.Mutex,
 
     /// Create a new root context with optional deadline
-    pub fn init(allocator: Allocator, deadline_ns: ?i128) Self {
-        return Self{
+    pub fn init(allocator: Allocator, deadline_ns: ?i128) Context {
+        return Context{
             .allocator = allocator,
             .deadline_ns = deadline_ns,
             .cancelled = false,
@@ -36,19 +34,19 @@ pub const Context = struct {
     }
 
     /// Create a background context (no deadline, never cancelled)
-    pub fn background(allocator: Allocator) Self {
+    pub fn background(allocator: Allocator) Context {
         return init(allocator, null);
     }
 
     /// Create a context with deadline from duration in milliseconds
-    pub fn withTimeout(allocator: Allocator, timeout_ms: u64) !Self {
+    pub fn withTimeout(allocator: Allocator, timeout_ms: u64) !Context {
         const now_ns = time.nanoTimestamp();
         const deadline_ns = now_ns + (@as(i128, timeout_ms) * time.ns_per_ms);
         return init(allocator, deadline_ns);
     }
 
     /// Create a context with absolute deadline
-    pub fn withDeadline(allocator: Allocator, deadline_ns: i128) !Self {
+    pub fn withDeadline(allocator: Allocator, deadline_ns: i128) !Context {
         const now_ns = time.nanoTimestamp();
         if (deadline_ns <= now_ns) {
             return ContextError.InvalidDeadline;
@@ -57,9 +55,9 @@ pub const Context = struct {
     }
 
     /// Create a child context from parent with optional new deadline
-    pub fn withParent(parent: *const Context, deadline_ns: ?i128) !*Self {
+    pub fn withParent(parent: *const Context, deadline_ns: ?i128) !*Context {
         const child = try parent.allocator.create(Context);
-        child.* = Self{
+        child.* = Context{
             .allocator = parent.allocator,
             .deadline_ns = if (deadline_ns) |d| blk: {
                 if (parent.deadline_ns) |parent_deadline| {
@@ -80,7 +78,7 @@ pub const Context = struct {
     }
 
     /// Clean up context resources
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Context) void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -97,7 +95,7 @@ pub const Context = struct {
     }
 
     /// Internal const check for cancellation (no mutex, for parent checking)
-    fn isCancelledInternal(self: *const Self) bool {
+    fn isCancelledInternal(self: *const Context) bool {
         // Check if explicitly cancelled
         if (self.cancelled) return true;
 
@@ -110,7 +108,7 @@ pub const Context = struct {
     }
 
     /// Check if context is cancelled
-    pub fn isCancelled(self: *Self) bool {
+    pub fn isCancelled(self: *Context) bool {
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -118,7 +116,7 @@ pub const Context = struct {
     }
 
     /// Check if deadline has been exceeded
-    pub fn isExpired(self: *Self) bool {
+    pub fn isExpired(self: *Context) bool {
         if (self.deadline_ns) |deadline| {
             return time.nanoTimestamp() >= deadline;
         }
@@ -126,19 +124,19 @@ pub const Context = struct {
     }
 
     /// Check if context is done (cancelled or expired)
-    pub fn isDone(self: *Self) bool {
+    pub fn isDone(self: *Context) bool {
         return self.isCancelled() or self.isExpired();
     }
 
     /// Get the error reason for why context is done
-    pub fn err(self: *Self) ?ContextError {
+    pub fn err(self: *Context) ?ContextError {
         if (self.isCancelled()) return ContextError.Cancelled;
         if (self.isExpired()) return ContextError.DeadlineExceeded;
         return null;
     }
 
     /// Cancel the context with optional reason
-    pub fn cancel(self: *Self, reason: ?[]const u8) !void {
+    pub fn cancel(self: *Context, reason: ?[]const u8) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -156,7 +154,7 @@ pub const Context = struct {
     }
 
     /// Get remaining time until deadline in nanoseconds
-    pub fn remainingTime(self: *Self) ?i128 {
+    pub fn remainingTime(self: *Context) ?i128 {
         if (self.deadline_ns) |deadline| {
             const now = time.nanoTimestamp();
             const remaining = deadline - now;
@@ -166,7 +164,7 @@ pub const Context = struct {
     }
 
     /// Sleep with context cancellation check
-    pub fn sleep(self: *Self, duration_ns: u64) ContextError!void {
+    pub fn sleep(self: *Context, duration_ns: u64) ContextError!void {
         const start = time.nanoTimestamp();
         const end_time = start + @as(i128, duration_ns);
 
@@ -179,7 +177,7 @@ pub const Context = struct {
     }
 
     /// Wait for context to be done with optional timeout
-    pub fn wait(self: *Self, timeout_ns: ?u64) ContextError!void {
+    pub fn wait(self: *Context, timeout_ns: ?u64) ContextError!void {
         const start = time.nanoTimestamp();
         const timeout_deadline = if (timeout_ns) |t| start + @as(i128, t) else null;
 
