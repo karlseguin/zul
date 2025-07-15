@@ -127,7 +127,7 @@ test "ThreadPool: small fuzz" {
         try tp.spawn(.{1});
     }
     while (tp.empty() == false) {
-        std.time.sleep(std.time.ns_per_ms);
+        std.Thread.sleep(std.time.ns_per_ms);
     }
     tp.deinit(t.allocator);
     try t.expectEqual(50_000, testSum);
@@ -141,7 +141,7 @@ test "ThreadPool: large fuzz" {
         try tp.spawn(.{1});
     }
     while (tp.empty() == false) {
-        std.time.sleep(std.time.ns_per_ms);
+        std.Thread.sleep(std.time.ns_per_ms);
     }
     tp.deinit(t.allocator);
     try t.expectEqual(50_000, testSum);

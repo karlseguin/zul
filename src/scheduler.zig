@@ -192,7 +192,7 @@ test "Scheduler: null context" {
     // never gets run
     try s.scheduleAt(.{ .recorder = .{ .value = 0, .history = &history } }, try DateTime.now().add(2, .seconds));
 
-    std.time.sleep(std.time.ns_per_ms * 20);
+    std.Thread.sleep(std.time.ns_per_ms * 20);
     s.stop();
 
     try t.expectEqual(3, counter);
@@ -212,7 +212,7 @@ test "Scheduler: with context" {
     try s.scheduleIn(.{ .add = 2 }, 4);
     try s.scheduleIn(.{ .add = 4 }, 8);
 
-    std.time.sleep(std.time.ns_per_ms * 20);
+    std.Thread.sleep(std.time.ns_per_ms * 20);
     s.stop();
 
     try t.expectEqual(9, ctx);

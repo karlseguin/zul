@@ -150,7 +150,7 @@ fn testPool(p: *Growing(TestPoolItem, void)) void {
         std.debug.assert(sb.data[0] == 0);
 
         sb.data[0] = 255;
-        std.time.sleep(random.uintAtMost(u32, 100000));
+        std.Thread.sleep(random.uintAtMost(u32, 100000));
         sb.data[0] = 0;
         p.release(sb);
     }

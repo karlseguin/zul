@@ -4,16 +4,17 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     // Expose this as a module that others can import
-    _ = b.addModule("zul", .{
+
+    const zul_module = b.addModule("zul", .{
+        .target = target,
+        .optimize = optimize,
         .root_source_file = b.path("src/zul.zig"),
     });
 
     {
         // test step
         const lib_test = b.addTest(.{
-            .root_source_file = b.path("src/zul.zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = zul_module,
             .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
         });
 

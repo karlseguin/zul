@@ -328,18 +328,37 @@ pub const StringBuilder = struct {
         self.buf = new_buffer;
     }
 
-    pub fn writer(self: *StringBuilder) Writer.IOWriter {
-        return .{ .context = Writer.init(self) };
+    pub fn writer(self: *StringBuilder) Writer {
+        return .init(self);
     }
 
     pub const Writer = struct {
         sb: *StringBuilder,
+        interface: std.io.Writer,
 
         pub const Error = Allocator.Error;
-        pub const IOWriter = std.io.Writer(Writer, error{OutOfMemory}, Writer.write);
 
         fn init(sb: *StringBuilder) Writer {
-            return .{ .sb = sb };
+            return .{
+                .sb = sb,
+                .interface = .{
+                    .vtable = &.{
+                        .drain = drain,
+                    },
+                    .buffer = &.{},
+                },
+            };
+        }
+
+        pub fn drain(io_w: *std.io.Writer, data: []const []const u8, splat: usize) error{WriteFailed}!usize {
+            _ = splat;
+            const self: *Writer = @alignCast(@fieldParentPtr("interface", io_w));
+            self.sb.write(data[0]) catch return error.WriteFailed;
+            return data[0].len;
+        }
+
+        pub fn print(self: *Writer, comptime fmt: []const u8, args: anytype) !void {
+            return self.interface.print(fmt, args) catch return error.OutOfMemory;
         }
 
         pub fn write(self: Writer, data: []const u8) Allocator.Error!usize {
@@ -354,6 +373,18 @@ pub const StringBuilder = struct {
         pub fn writeByte(self: Writer, b: u8) Allocator.Error!void {
             try self.sb.writeByte(b);
         }
+        pub fn writeByteNTimes(self: Writer, b: u8, n: usize) !void {
+            return self.sb.writeByteNTimes(b, n);
+        }
+
+        pub fn adaptToNewApi(self: Writer) Adapter {
+            return .{ .new_interface = self.interface };
+        }
+
+        pub const Adapter = struct {
+            err: ?Error = null,
+            new_interface: std.Io.Writer,
+        };
     };
 };
 
@@ -1093,7 +1124,7 @@ fn testPool(p: *Pool, i: u8) void {
         std.debug.assert(sb.static[0] == 0);
 
         sb.static[0] = i;
-        std.time.sleep(t.Random.intRange(u32, 1000, 10000));
+        std.Thread.sleep(t.Random.intRange(u32, 1000, 10000));
         // no other thread should have set this to 0
         std.debug.assert(sb.static[0] == i);
         sb.static[0] = 0;

@@ -125,21 +125,23 @@ pub const UUID = struct {
         return UUID.parse(hex) catch error.UnexpectedToken;
     }
 
+    pub fn lower(self: UUID) Formatter {
+        return .{.uuid = self, .case = .lower};
+    }
+    pub fn upper(self: UUID) Formatter {
+        return .{.uuid = self, .case = .upper};
+    }
+    pub fn format(self: UUID, writer: *std.Io.Writer) !void {
+        return writer.writeAll(&self.toHex(.lower));
+    }
+};
 
-    pub fn format(self: UUID, comptime layout: []const u8, options: fmt.FormatOptions, out: anytype) !void {
-        _ = options;
+pub const Formatter = struct {
+    uuid: UUID,
+    case: std.fmt.Case,
 
-        const casing: std.fmt.Case = blk: {
-            if (layout.len == 0) break :blk .lower;
-            break :blk switch (layout[0]) {
-                's', 'x' => .lower,
-                'X' => .upper,
-                else => @compileError("Unsupported format specifier for UUID: " ++ layout),
-            };
-        };
-
-        const hex = self.toHex(casing);
-        return std.fmt.format(out, "{s}", .{hex});
+    pub fn format(self: Formatter, writer: *std.Io.Writer) !void {
+        return writer.writeAll(&self.uuid.toHex(self.case));
     }
 };
 
@@ -301,17 +303,17 @@ test "uuid: format" {
     var buf: [50]u8 = undefined;
 
     {
-        const str = try std.fmt.bufPrint(&buf, "[{s}]", .{uuid});
+        const str = try std.fmt.bufPrint(&buf, "[{f}]", .{uuid.lower()});
         try t.expectEqual("[d543e371-a33d-4e68-87ba-7c9e3470a3be]", str);
     }
 
     {
-        const str = try std.fmt.bufPrint(&buf, "[{x}]", .{uuid});
+        const str = try std.fmt.bufPrint(&buf, "[{f}]", .{uuid});
         try t.expectEqual("[d543e371-a33d-4e68-87ba-7c9e3470a3be]", str);
     }
 
     {
-        const str = try std.fmt.bufPrint(&buf, "[{X}]", .{uuid});
+        const str = try std.fmt.bufPrint(&buf, "[{f}]", .{uuid.upper()});
         try t.expectEqual("[D543E371-A33D-4E68-87BA-7C9E3470A3BE]", str);
     }
 }

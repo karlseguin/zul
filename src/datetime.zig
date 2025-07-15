@@ -67,10 +67,10 @@ pub const Date = struct {
         return std.math.order(a.day, b.day);
     }
 
-    pub fn format(self: Date, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    pub fn format(self: Date, writer: *std.Io.Writer) !void {
         var buf: [11]u8 = undefined;
         const n = writeDate(&buf, self);
-        try out.writeAll(buf[0..n]);
+        try writer.writeAll(buf[0..n]);
     }
 
     pub fn jsonStringify(self: Date, out: anytype) !void {
@@ -167,10 +167,10 @@ pub const Time = struct {
         return std.math.order(a.micros, b.micros);
     }
 
-    pub fn format(self: Time, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    pub fn format(self: Time, writer: *std.Io.Writer) !void {
         var buf: [15]u8 = undefined;
         const n = writeTime(&buf, self);
-        try out.writeAll(buf[0..n]);
+        try writer.writeAll(buf[0..n]);
     }
 
     pub fn jsonStringify(self: Time, out: anytype) !void {
@@ -417,10 +417,10 @@ pub const DateTime = struct {
         return std.math.order(a.micros, b.micros);
     }
 
-    pub fn format(self: DateTime, comptime _: []const u8, _: std.fmt.FormatOptions, out: anytype) !void {
+    pub fn format(self: DateTime, writer: *std.Io.Writer) !void {
         var buf: [28]u8 = undefined;
         const n = self.bufWrite(&buf);
-        try out.writeAll(buf[0..n]);
+        try writer.writeAll(buf[0..n]);
     }
 
     pub fn jsonStringify(self: DateTime, out: anytype) !void {
@@ -463,11 +463,13 @@ fn writeDate(into: []u8, date: Date) u8 {
     // the padding (we need to do it ourselfs)
     const year = date.year;
     if (year < 0) {
-        _ = std.fmt.formatIntBuf(into[1..], @as(u16, @intCast(year * -1)), 10, .lower, .{ .width = 4, .fill = '0' });
         into[0] = '-';
+        var writer = std.Io.Writer.fixed(into[1..]);
+        writer.printInt(@as(u16, @intCast(year * -1)), 10, .lower, .{ .width = 4, .fill = '0' }) catch unreachable;
         buf = into[5..];
     } else {
-        _ = std.fmt.formatIntBuf(into, @as(u16, @intCast(year)), 10, .lower, .{ .width = 4, .fill = '0' });
+        var writer = std.Io.Writer.fixed(into);
+        writer.printInt(@as(u16, @intCast(year)), 10, .lower, .{ .width = 4, .fill = '0' }) catch unreachable;
         buf = into[4..];
     }
 
@@ -494,12 +496,14 @@ fn writeTime(into: []u8, time: Time) u8 {
 
     if (@rem(micros, 1000) == 0) {
         into[8] = '.';
-        _ = std.fmt.formatIntBuf(into[9..12], micros / 1000, 10, .lower, .{ .width = 3, .fill = '0' });
+        var writer = std.Io.Writer.fixed(into[9..12]);
+        writer.printInt(micros / 1000, 10, .lower, .{ .width = 3, .fill = '0' }) catch unreachable;
         return 12;
     }
 
     into[8] = '.';
-    _ = std.fmt.formatIntBuf(into[9..15], micros, 10, .lower, .{ .width = 6, .fill = '0' });
+    var writer = std.Io.Writer.fixed(into[9..15]);
+    writer.printInt(micros, 10, .lower, .{ .width = 6, .fill = '0' }) catch unreachable;
     return 15;
 }
 
@@ -696,13 +700,13 @@ test "Date: json" {
 test "Date: format" {
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Date{ .year = 2023, .month = 5, .day = 22 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Date{ .year = 2023, .month = 5, .day = 22 }});
         try t.expectEqual("2023-05-22", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Date{ .year = -102, .month = 12, .day = 9 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Date{ .year = -102, .month = 12, .day = 9 }});
         try t.expectEqual("-0102-12-09", out);
     }
 }
@@ -887,37 +891,37 @@ test "Time: json" {
 test "Time: format" {
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 23, .min = 59, .sec = 59, .micros = 0 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 23, .min = 59, .sec = 59, .micros = 0 }});
         try t.expectEqual("23:59:59", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 12 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 12 }});
         try t.expectEqual("08:09:10.000012", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 123 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 123 }});
         try t.expectEqual("08:09:10.000123", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 1234 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 1234 }});
         try t.expectEqual("08:09:10.001234", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 12345 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 12345 }});
         try t.expectEqual("08:09:10.012345", out);
     }
 
     {
         var buf: [20]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 123456 }});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{Time{ .hour = 8, .min = 9, .sec = 10, .micros = 123456 }});
         try t.expectEqual("08:09:10.123456", out);
     }
 }
@@ -1518,37 +1522,37 @@ test "DateTime: json" {
 test "DateTime: format" {
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(2023, 5, 22, 23, 59, 59, 0)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(2023, 5, 22, 23, 59, 59, 0)});
         try t.expectEqual("2023-05-22T23:59:59Z", out);
     }
 
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 12)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 12)});
         try t.expectEqual("2023-05-22T08:09:10.000012Z", out);
     }
 
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 123)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 123)});
         try t.expectEqual("2023-05-22T08:09:10.000123Z", out);
     }
 
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 1234)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(2023, 5, 22, 8, 9, 10, 1234)});
         try t.expectEqual("2023-05-22T08:09:10.001234Z", out);
     }
 
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(-102, 12, 9, 8, 9, 10, 12345)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(-102, 12, 9, 8, 9, 10, 12345)});
         try t.expectEqual("-0102-12-09T08:09:10.012345Z", out);
     }
 
     {
         var buf: [30]u8 = undefined;
-        const out = try std.fmt.bufPrint(&buf, "{s}", .{try DateTime.initUTC(-102, 12, 9, 8, 9, 10, 123456)});
+        const out = try std.fmt.bufPrint(&buf, "{f}", .{try DateTime.initUTC(-102, 12, 9, 8, 9, 10, 123456)});
         try t.expectEqual("-0102-12-09T08:09:10.123456Z", out);
     }
 }
@@ -1916,7 +1920,7 @@ test "DateTime: add" {
 
 fn expectDateTime(expected: []const u8, dt: DateTime) !void {
     var buf: [30]u8 = undefined;
-    const actual = try std.fmt.bufPrint(&buf, "{s}", .{dt});
+    const actual = try std.fmt.bufPrint(&buf, "{f}", .{dt});
     try t.expectEqual(expected, actual);
 }
 
