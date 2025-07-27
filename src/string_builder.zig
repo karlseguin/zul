@@ -740,7 +740,7 @@ test "StringBuilder: writer json" {
     var sb = StringBuilder.init(t.allocator);
     defer sb.deinit();
 
-    try std.json.stringify(.{ .over = 9000, .spice = "must flow", .ok = true }, .{}, sb.writer());
+    try std.json.Stringify.value(.{ .over = 9000, .spice = "must flow", .ok = true }, .{}, sb.writer());
     try t.expectEqual("{\"over\":9000,\"spice\":\"must flow\",\"ok\":true}", sb.string());
 }
 

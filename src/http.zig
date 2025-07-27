@@ -714,7 +714,7 @@ fn startTestServer() !std.Thread {
                 }
 
                 const req_body = try (try req.reader()).readAllAlloc(allocator, 16_384);
-                const res = try std.json.stringifyAlloc(allocator, .{
+                const res = try std.json.Stringify.valueAlloc(allocator, .{
                     .url = req.head.target,
                     .method = req.head.method,
                     .body = req_body,

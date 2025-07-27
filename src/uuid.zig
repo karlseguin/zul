@@ -284,13 +284,13 @@ test "uuid: json" {
     const uuid = try UUID.parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
     var out = std.ArrayList(u8).init(t.arena.allocator());
 
-    try std.json.stringify(.{
+    try std.json.Stringify.value(.{
         .uuid = uuid,
     }, .{}, out.writer());
 
     try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", out.items);
 
-    const S = struct{uuid: UUID};
+    const S = struct { uuid: UUID };
     const parsed = try std.json.parseFromSlice(S, t.allocator, out.items, .{});
     defer parsed.deinit();
 
