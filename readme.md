@@ -37,9 +37,11 @@ Next, in your `build.zig`, you should already have an executable, something like
 ```zig
 const exe = b.addExecutable(.{
     .name = "my-app",
-    .root_source_file = b.path("src/main.zig"),
-    .target = target,
-    .optimize = optimize,
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    }),
 });
 ```
 
