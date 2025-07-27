@@ -168,7 +168,7 @@ pub const Context = struct {
             if (self.isDone()) {
                 return self.err() orelse ContextError.Cancelled;
             }
-            time.sleep(time.ns_per_ms); // Sleep 1ms between checks
+            std.Thread.sleep(time.ns_per_ms); // Sleep 1ms between checks
         }
     }
 
@@ -183,7 +183,7 @@ pub const Context = struct {
                     return ContextError.DeadlineExceeded;
                 }
             }
-            time.sleep(time.ns_per_ms); // Sleep 1ms between checks
+            std.Thread.sleep(time.ns_per_ms); // Sleep 1ms between checks
         }
 
         return self.err() orelse ContextError.Cancelled;
@@ -265,7 +265,7 @@ test "Context: deadline expiration" {
     defer ctx.deinit();
 
     // Wait for expiration
-    time.sleep(5 * time.ns_per_ms); // Sleep 5ms
+    std.Thread.sleep(5 * time.ns_per_ms); // Sleep 5ms
 
     try testing.expect(ctx.isExpired());
     try testing.expect(ctx.isDone());
@@ -313,7 +313,7 @@ test "Context: sleep with cancellation" {
     // Cancel context in separate thread after delay
     const thread = try std.Thread.spawn(.{}, struct {
         fn cancelAfterDelay(context: *Context) void {
-            time.sleep(10 * time.ns_per_ms); // 10ms delay
+            std.Thread.sleep(10 * time.ns_per_ms); // 10ms delay
             context.cancel() catch {};
         }
     }.cancelAfterDelay, .{&ctx});
@@ -354,7 +354,7 @@ test "Context: remaining time calculation" {
     try testing.expect(remaining1 != null);
     try testing.expect(remaining1.? > 0);
 
-    time.sleep(50 * time.ns_per_ms); // Sleep 50ms
+    std.Thread.sleep(50 * time.ns_per_ms); // Sleep 50ms
 
     const remaining2 = ctx.remainingTime();
     try testing.expect(remaining2 != null);
@@ -370,7 +370,7 @@ test "Context: wait for cancellation" {
     // Cancel after delay
     const thread = try std.Thread.spawn(.{}, struct {
         fn cancelAfterDelay(context: *Context) void {
-            time.sleep(20 * time.ns_per_ms);
+            std.Thread.sleep(20 * time.ns_per_ms);
             context.cancel() catch {};
         }
     }.cancelAfterDelay, .{&ctx});
