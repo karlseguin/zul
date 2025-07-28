@@ -61,7 +61,7 @@ test {
 
 const t = testing;
 test "JsonString" {
-    const str = try std.json.stringifyAlloc(t.allocator, .{
+    const str = try std.json.Stringify.valueAlloc(t.allocator, .{
         .data = jsonString("{\"over\": 9000}"),
     }, .{});
     defer t.allocator.free(str);

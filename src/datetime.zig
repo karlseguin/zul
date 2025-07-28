@@ -676,7 +676,7 @@ test "Date: json" {
     {
         // date, positive year
         const date = Date{ .year = 2023, .month = 9, .day = 22 };
-        const out = try std.json.stringifyAlloc(t.allocator, date, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, date, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"2023-09-22\"", out);
     }
@@ -684,7 +684,7 @@ test "Date: json" {
     {
         // date, negative year
         const date = Date{ .year = -4, .month = 12, .day = 3 };
-        const out = try std.json.stringifyAlloc(t.allocator, date, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, date, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"-0004-12-03\"", out);
     }
@@ -859,7 +859,7 @@ test "Time: json" {
     {
         // time no fraction
         const time = Time{ .hour = 23, .min = 59, .sec = 2, .micros = 0 };
-        const out = try std.json.stringifyAlloc(t.allocator, time, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, time, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"23:59:02\"", out);
     }
@@ -867,7 +867,7 @@ test "Time: json" {
     {
         // time, milliseconds only
         const time = Time{ .hour = 7, .min = 9, .sec = 32, .micros = 202000 };
-        const out = try std.json.stringifyAlloc(t.allocator, time, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, time, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"07:09:32.202\"", out);
     }
@@ -875,7 +875,7 @@ test "Time: json" {
     {
         // time, micros
         const time = Time{ .hour = 1, .min = 2, .sec = 3, .micros = 123456 };
-        const out = try std.json.stringifyAlloc(t.allocator, time, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, time, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"01:02:03.123456\"", out);
     }
@@ -1490,7 +1490,7 @@ test "DateTime: json" {
     {
         // DateTime, time no fraction
         const dt = try DateTime.parse("2023-09-22T23:59:02Z", .rfc3339);
-        const out = try std.json.stringifyAlloc(t.allocator, dt, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, dt, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"2023-09-22T23:59:02Z\"", out);
     }
@@ -1498,7 +1498,7 @@ test "DateTime: json" {
     {
         // time, milliseconds only
         const dt = try DateTime.parse("2023-09-22T07:09:32.202Z", .rfc3339);
-        const out = try std.json.stringifyAlloc(t.allocator, dt, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, dt, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"2023-09-22T07:09:32.202Z\"", out);
     }
@@ -1506,7 +1506,7 @@ test "DateTime: json" {
     {
         // time, micros
         const dt = try DateTime.parse("-0004-12-03T01:02:03.123456Z", .rfc3339);
-        const out = try std.json.stringifyAlloc(t.allocator, dt, .{});
+        const out = try std.json.Stringify.valueAlloc(t.allocator, dt, .{});
         defer t.allocator.free(out);
         try t.expectEqual("\"-0004-12-03T01:02:03.123456Z\"", out);
     }
