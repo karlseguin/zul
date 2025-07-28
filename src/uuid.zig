@@ -281,17 +281,19 @@ test "uuid: binToHex" {
 
 test "uuid: json" {
     defer t.reset();
+    const allocator = std.testing.allocator;
+
     const uuid = try UUID.parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
-    var out = std.ArrayList(u8).init(t.arena.allocator());
 
-    try std.json.Stringify.value(.{
+    const buffer = try std.json.Stringify.valueAlloc(std.testing.allocator, .{
         .uuid = uuid,
-    }, .{}, out.writer());
+    }, .{});
+    defer allocator.free(buffer);
 
-    try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", out.items);
+    try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", buffer);
 
     const S = struct { uuid: UUID };
-    const parsed = try std.json.parseFromSlice(S, t.allocator, out.items, .{});
+    const parsed = try std.json.parseFromSlice(S, t.allocator, buffer, .{});
     defer parsed.deinit();
 
     try t.expectEqual("938b1cd2-f479-442b-9ba6-59ebf441e695", &parsed.value.uuid.toHex(.lower));
