@@ -220,7 +220,7 @@ Allows the embedding of already-encoded JSON strings into objects in order to av
 
 ```zig
 const an_encoded_json_value = "{\"over\": 9000}";
-const str = try std.json.stringifyAlloc(allocator, .{
+const str = try std.json.Stringify.valueAlloc(allocator, .{
 	.name = "goku",
 	.power = zul.jsonString(an_encoded_json_value),
 }, .{});

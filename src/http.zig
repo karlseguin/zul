@@ -98,10 +98,14 @@ pub const Request = struct {
         // + 5 as random buffer for escaping
         try url.ensureUnusedCapacity(name.len + value.len + 7);
 
-        const writer = url.writer();
-        try encodeQueryComponent(name, writer);
+        const allocator = self._arena.allocator();
+
+        var buf: std.ArrayListUnmanaged(u8) = .empty;
+        defer buf.deinit(allocator);
+
+        try encodeQueryComponent(name, &buf, allocator);
         try url.writeByte('=');
-        try encodeQueryComponent(value, writer);
+        try encodeQueryComponent(value, &buf, allocator);
         try url.writeByte('&');
     }
 
@@ -124,10 +128,14 @@ pub const Request = struct {
             try bw.append('&');
         }
 
-        const writer = bw.writer();
-        try encodeQueryComponent(key, writer);
+        const allocator = self._arena.allocator();
+
+        var buf: std.ArrayListUnmanaged(u8) = .empty;
+        defer buf.deinit(allocator);
+
+        try encodeQueryComponent(key, &buf, allocator);
         try bw.append('=');
-        try encodeQueryComponent(value, writer);
+        try encodeQueryComponent(value, &buf, allocator);
 
         self._body = .{ .str = bw.items };
     }
@@ -247,7 +255,7 @@ pub const Response = struct {
     }
 
     pub fn headerIterator(self: *const Response, name: []const u8) HeaderIterator {
-        return .{.name = name, .it = self.res.iterateHeaders()};
+        return .{ .name = name, .it = self.res.iterateHeaders() };
     }
 
     pub fn json(self: *const Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
@@ -316,14 +324,12 @@ pub fn encodeQueryComponentLen(s: []const u8) usize {
 
 const UPPER_HEX = "0123456789ABCDEF";
 
-pub fn encodeQueryComponent(s: []const u8, writer: anytype) !void {
+pub fn encodeQueryComponent(s: []const u8, buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allocator) !void {
     for (s) |c| {
         if (shouldEscape(c)) {
-            try writer.writeByte('%');
-            try writer.writeByte(UPPER_HEX[c >> 4]);
-            try writer.writeByte(UPPER_HEX[c & 15]);
+            try buf.print(allocator, "{c}{c}{c}", .{ '%', UPPER_HEX[c >> 4], UPPER_HEX[c & 15] });
         } else {
-            try writer.writeByte(c);
+            try buf.print(allocator, "{c}", .{c});
         }
     }
 }
@@ -613,36 +619,37 @@ test "http: encodeQueryComponentLen" {
 }
 
 test "http: encodeQueryComponent" {
-    var arr = std.ArrayList(u8).init(t.allocator);
-    defer arr.deinit();
+    const alloc = std.testing.allocator;
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
+    defer buf.deinit(alloc);
 
     {
-        try encodeQueryComponent("", arr.writer());
-        try t.expectEqual("", arr.items);
+        try encodeQueryComponent("", &buf, alloc);
+        try t.expectEqual("", buf.items);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello_world", arr.writer());
-        try t.expectEqual("hello_world", arr.items);
+        buf.clearRetainingCapacity();
+        try encodeQueryComponent("hello_world", &buf, alloc);
+        try t.expectEqual("hello_world", buf.items);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello world", arr.writer());
-        try t.expectEqual("hello%20world", arr.items);
+        buf.clearRetainingCapacity();
+        try encodeQueryComponent("hello world", &buf, alloc);
+        try t.expectEqual("hello%20world", buf.items);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", arr.writer());
-        try t.expectEqual("%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", arr.items);
+        buf.clearRetainingCapacity();
+        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", &buf, alloc);
+        try t.expectEqual("%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", buf.items);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("☺", arr.writer());
-        try t.expectEqual("%E2%98%BA", arr.items);
+        buf.clearRetainingCapacity();
+        try encodeQueryComponent("☺", &buf, alloc);
+        try t.expectEqual("%E2%98%BA", buf.items);
     }
 }
 
@@ -684,11 +691,11 @@ fn startTestServer() !std.Thread {
 
                 if (std.mem.eql(u8, "/dupe_header", req.head.target) == true) {
                     try req.respond("hello", .{
-                        .keep_alive = false ,
+                        .keep_alive = false,
                         .extra_headers = &.{
-                            .{.name = "Set-Cookie", .value = "cc=11"},
-                            .{.name = "Set-Cookie", .value = "bb=22"},
-                            .{.name = "Other", .value = "value"},
+                            .{ .name = "Set-Cookie", .value = "cc=11" },
+                            .{ .name = "Set-Cookie", .value = "bb=22" },
+                            .{ .name = "Other", .value = "value" },
                         },
                     });
                     continue;
@@ -707,7 +714,7 @@ fn startTestServer() !std.Thread {
                 }
 
                 const req_body = try (try req.reader()).readAllAlloc(allocator, 16_384);
-                const res = try std.json.stringifyAlloc(allocator, .{
+                const res = try std.json.Stringify.valueAlloc(allocator, .{
                     .url = req.head.target,
                     .method = req.head.method,
                     .body = req_body,
