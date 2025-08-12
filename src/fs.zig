@@ -14,7 +14,12 @@ pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, o
     defer file.close();
 
     var buffered = std.io.bufferedReader(file.deprecatedReader());
-    var reader = std.json.reader(allocator, buffered.reader());
+    var new_interface = buffered.reader().adaptToNewApi(&buffered.buf).new_interface;
+
+    var reader: std.json.Reader = .init(
+        allocator,
+        &new_interface,
+    );
     defer reader.deinit();
 
     var o = opts;
