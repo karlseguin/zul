@@ -12,9 +12,10 @@ In your build.zig.zon add a reference to Zul:
 
 ```zig
 .{
-  .name = "my-app",
+  .name = .your_app,
   .paths = .{""},
   .version = "0.0.0",
+  .fingerprint = 0x00000000,
   .dependencies = .{
     .zul = .{
       .url = "https://github.com/karlseguin/zul/archive/master.tar.gz",
