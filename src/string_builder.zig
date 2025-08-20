@@ -59,7 +59,7 @@ pub const StringBuilder = struct {
         buffer_size: usize = 8192,
     };
 
-    pub fn fromReader(allocator: Allocator, reader: anytype, opts: FromReaderOpts) !StringBuilder {
+    pub fn fromReader(allocator: Allocator, reader: *std.Io.Reader, opts: FromReaderOpts) !StringBuilder {
         const max_size = opts.max_size;
         const buffer_size = if (opts.buffer_size < 64) 64 else opts.buffer_size;
 
@@ -82,7 +82,7 @@ pub const StringBuilder = struct {
                 read_slice = buf[pos..];
             }
 
-            const n = try reader.read(read_slice);
+            const n = try reader.readSliceShort(read_slice);
             if (n == 0) {
                 break;
             }
@@ -718,8 +718,8 @@ test "StringBuilder: truncate" {
 test "StringBuilder: fuzz" {
     defer t.reset();
 
-    var control = std.ArrayList(u8).init(t.allocator);
-    defer control.deinit();
+    var control: std.ArrayListUnmanaged(u8) = .empty;
+    defer control.deinit(t.allocator);
 
     for (1..25) |_| {
         var sb = StringBuilder.init(t.allocator);
@@ -729,7 +729,7 @@ test "StringBuilder: fuzz" {
             var buf: [30]u8 = undefined;
             const input = t.Random.fillAtLeast(&buf, 1);
             try sb.write(input);
-            try control.appendSlice(input);
+            try control.appendSlice(t.allocator, input);
             try t.expectEqual(control.items, sb.string());
         }
         control.clearRetainingCapacity();
@@ -740,7 +740,8 @@ test "StringBuilder: writer json" {
     var sb = StringBuilder.init(t.allocator);
     defer sb.deinit();
 
-    try std.json.stringify(.{ .over = 9000, .spice = "must flow", .ok = true }, .{}, sb.writer());
+    var writer = sb.writer();
+    try std.json.Stringify.value(.{ .over = 9000, .spice = "must flow", .ok = true }, .{}, &writer.interface);
     try t.expectEqual("{\"over\":9000,\"spice\":\"must flow\",\"ok\":true}", sb.string());
 }
 
@@ -972,24 +973,24 @@ test "StringBuilder: fromReader" {
 
     {
         // input too large
-        var stream = std.io.fixedBufferStream(&buf);
-        try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, stream.reader(), .{
+        var reader = std.io.Reader.fixed(&buf);
+        try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, &reader, .{
             .max_size = 1,
         }));
     }
 
     {
         // input too large (just)
-        var stream = std.io.fixedBufferStream(&buf);
-        try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, stream.reader(), .{
+        var reader = std.io.Reader.fixed(&buf);
+        try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, &reader, .{
             .max_size = 4999,
         }));
     }
 
     {
         // test with larger buffer than input
-        var stream = std.io.fixedBufferStream(&buf);
-        const sb = try StringBuilder.fromReader(t.allocator, stream.reader(), .{
+        var reader = std.io.Reader.fixed(&buf);
+        const sb = try StringBuilder.fromReader(t.allocator, &reader, .{
             .buffer_size = 6000,
         });
         defer sb.deinit();
@@ -998,8 +999,8 @@ test "StringBuilder: fromReader" {
 
     // test with different buffer sizes
     for (0..50) |_| {
-        var stream = std.io.fixedBufferStream(&buf);
-        const sb = try StringBuilder.fromReader(t.allocator, stream.reader(), .{
+        var reader = std.io.Reader.fixed(&buf);
+        const sb = try StringBuilder.fromReader(t.allocator, &reader, .{
             .buffer_size = t.Random.intRange(u16, 510, 5000),
         });
         defer sb.deinit();

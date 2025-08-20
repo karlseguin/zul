@@ -5,7 +5,7 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 
 pub const CommandLineArgs = struct {
     _arena: *ArenaAllocator,
-    _lookup: std.StringHashMap([]const u8),
+    _lookup: std.StringHashMapUnmanaged([]const u8),
 
     exe: []const u8,
     tail: [][]const u8,
@@ -25,8 +25,8 @@ pub const CommandLineArgs = struct {
     // Done this way, with our anytype iterator so that we can write unit tests
     fn parseFromIterator(arena: *ArenaAllocator, it: anytype) !CommandLineArgs {
         const allocator = arena.allocator();
-        var list = std.ArrayList([]const u8).init(allocator);
-        var lookup = std.StringHashMap([]const u8).init(allocator);
+        var list: std.ArrayList([]const u8) = .empty;
+        var lookup: std.StringHashMapUnmanaged([]const u8) = .{};
 
         const exe = blk: {
             const first = it.next() orelse return .{
@@ -37,14 +37,14 @@ pub const CommandLineArgs = struct {
                 ._lookup = lookup,
             };
             const exe = try allocator.dupe(u8, first);
-            try list.append(exe);
+            try list.append(allocator, exe);
             break :blk exe;
         };
 
         // first thing we do is collect them all into our list. This will let us
         // move forwards and backwards when we do our simple parsing
         while (it.next()) |arg| {
-            try list.append(try allocator.dupe(u8, arg));
+            try list.append(allocator, try allocator.dupe(u8, arg));
         }
 
         // 1, skip the exe
@@ -61,7 +61,7 @@ pub const CommandLineArgs = struct {
 
             if (arg[1] == '-') {
                 const kv = KeyValue.from(arg[2..], items, &i);
-                try lookup.put(kv.key, kv.value);
+                try lookup.put(allocator, kv.key, kv.value);
             } else {
                 const kv = KeyValue.from(arg[1..], items, &i);
                 const key = kv.key;
@@ -69,9 +69,9 @@ pub const CommandLineArgs = struct {
                 // -xvf file.tar.gz
                 // parses into x=>"", v=>"", f=>"file.tar.gz"
                 for (0..key.len - 1) |j| {
-                    try lookup.put(key[j .. j + 1], "");
+                    try lookup.put(allocator, key[j .. j + 1], "");
                 }
-                try lookup.put(key[key.len - 1 ..], kv.value);
+                try lookup.put(allocator, key[key.len - 1 ..], kv.value);
             }
             tail_start = i;
         }

@@ -126,10 +126,10 @@ pub const UUID = struct {
     }
 
     pub fn lower(self: UUID) Formatter {
-        return .{.uuid = self, .case = .lower};
+        return .{ .uuid = self, .case = .lower };
     }
     pub fn upper(self: UUID) Formatter {
-        return .{.uuid = self, .case = .upper};
+        return .{ .uuid = self, .case = .upper };
     }
     pub fn format(self: UUID, writer: *std.Io.Writer) !void {
         return writer.writeAll(&self.toHex(.lower));
@@ -282,16 +282,15 @@ test "uuid: binToHex" {
 test "uuid: json" {
     defer t.reset();
     const uuid = try UUID.parse("938b1cd2-f479-442b-9ba6-59ebf441e695");
-    var out = std.ArrayList(u8).init(t.arena.allocator());
 
-    try std.json.stringify(.{
+    const out = try std.json.Stringify.valueAlloc(t.arena.allocator(), .{
         .uuid = uuid,
-    }, .{}, out.writer());
+    }, .{});
 
-    try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", out.items);
+    try t.expectEqual("{\"uuid\":\"938b1cd2-f479-442b-9ba6-59ebf441e695\"}", out);
 
-    const S = struct{uuid: UUID};
-    const parsed = try std.json.parseFromSlice(S, t.allocator, out.items, .{});
+    const S = struct { uuid: UUID };
+    const parsed = try std.json.parseFromSlice(S, t.allocator, out, .{});
     defer parsed.deinit();
 
     try t.expectEqual("938b1cd2-f479-442b-9ba6-59ebf441e695", &parsed.value.uuid.toHex(.lower));

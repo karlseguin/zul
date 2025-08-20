@@ -70,9 +70,9 @@ pub const Request = struct {
         return .{
             ._client = client,
             ._arena = arena,
-            ._body_writer = std.ArrayList(u8).init(aa),
             .url = url_builder,
-            .headers = std.ArrayList(std.http.Header).init(aa),
+            ._body_writer = .empty,
+            .headers = .empty,
         };
     }
 
@@ -88,7 +88,7 @@ pub const Request = struct {
     }
 
     pub fn header(self: *Request, name: []const u8, value: []const u8) !void {
-        try self.headers.append(.{ .name = name, .value = value });
+        try self.headers.append(self._arena.allocator(), .{ .name = name, .value = value });
     }
 
     pub fn query(self: *Request, name: []const u8, value: []const u8) !void {
@@ -115,18 +115,19 @@ pub const Request = struct {
 
     pub fn formBody(self: *Request, key: []const u8, value: []const u8) !void {
         var bw = &self._body_writer;
+        const arena = self._arena.allocator();
 
         // +5 for random extra overhead (of encoding)
-        try bw.ensureUnusedCapacity(key.len + value.len + 5);
+        try bw.ensureUnusedCapacity(arena, key.len + value.len + 5);
         if (bw.items.len == 0) {
             try self.header("Content-Type", "application/x-www-form-urlencoded");
         } else {
-            try bw.append('&');
+            try bw.append(arena, '&');
         }
 
-        const writer = bw.writer();
+        const writer = bw.writer(arena);
         try encodeQueryComponent(key, writer);
-        try bw.append('=');
+        try bw.append(arena, '=');
         try encodeQueryComponent(value, writer);
 
         self._body = .{ .str = bw.items };
@@ -156,12 +157,9 @@ pub const Request = struct {
             break :blk try std.Uri.parse(url);
         };
 
-        var server_header_buffer: [8 * 1024]u8 = undefined;
-
-        self._req = try self._client.open(self.method, uri, .{
+        self._req = try self._client.request(self.method, uri, .{
             .extra_headers = self.headers.items,
             .redirect_behavior = if (have_body) .not_allowed else @enumFromInt(5),
-            .server_header_buffer = &server_header_buffer,
         });
         var req = &self._req.?;
 
@@ -185,15 +183,18 @@ pub const Request = struct {
             if (file) |f| f.close();
         }
 
-        try req.send();
-
         switch (self._body) {
-            .str => |str| try req.writeAll(str),
+            .str => |str| {
+                var req_body = try req.sendBody(&.{});
+                try req_body.writer.writeAll(str);
+                try req_body.end();
+            },
             .file => {
+                var req_body = try req.sendBody(&.{});
+
                 var f = file.?;
                 try f.seekTo(0);
 
-                var writer = req.writer();
                 var buf: [4096]u8 = undefined;
                 const progress = opts.write_progress;
 
@@ -203,27 +204,27 @@ pub const Request = struct {
                     if (n == 0) {
                         break;
                     }
-                    try writer.writeAll(buf[0..n]);
+                    try req_body.writer.writeAll(buf[0..n]);
                     if (progress) |p| {
                         written += n;
                         p(content_length.?, written, opts.write_progress_state);
                     }
                 }
+                try req_body.end();
             },
-            else => {},
+            else => try req.sendBodiless(),
         }
 
-        try req.finish();
-        try req.wait();
+        var redirect_buffer: [1024 * 4]u8 = undefined;
+        var res = try req.receiveHead(&redirect_buffer);
 
-        const res = &req.response;
         const arena = self._arena.allocator();
-        var headers = std.StringHashMap([]const u8).init(arena);
+        var headers: std.StringHashMapUnmanaged([]const u8) = .empty;
         if (opts.response_headers == true) {
-            var it = res.iterateHeaders();
+            var it = res.head.iterateHeaders();
             while (it.next()) |hdr| {
                 const lower = try std.ascii.allocLowerString(arena, hdr.name);
-                try headers.put(lower, hdr.value);
+                try headers.put(arena, lower, try arena.dupe(u8, hdr.value));
             }
         }
 
@@ -231,7 +232,7 @@ pub const Request = struct {
             .req = req,
             .res = res,
             .headers = headers,
-            .status = @intFromEnum(res.status),
+            .status = @intFromEnum(res.head.status),
         };
     }
 };
@@ -239,33 +240,56 @@ pub const Request = struct {
 pub const Response = struct {
     status: u16,
     req: *std.http.Client.Request,
-    res: *std.http.Client.Response,
-    headers: std.StringHashMap([]const u8),
+    res: std.http.Client.Response,
+    headers: std.StringHashMapUnmanaged([]const u8),
 
     pub fn header(self: *const Response, name: []const u8) ?[]const u8 {
         return self.headers.get(name);
     }
 
     pub fn headerIterator(self: *const Response, name: []const u8) HeaderIterator {
-        return .{.name = name, .it = self.res.iterateHeaders()};
+        return .{ .name = name, .it = self.res.head.iterateHeaders() };
     }
 
-    pub fn json(self: *const Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
-        // No point using a BufferedReader since the JSON reader does its own buffering
-        var reader = std.json.reader(allocator, self.req.reader());
-        defer reader.deinit();
+    pub fn json(self: *Response, comptime T: type, allocator: Allocator, opts: std.json.ParseOptions) !zul.Managed(T) {
+        const decompress_buffer: []u8 = switch (self.res.head.content_encoding) {
+            .identity => &.{},
+            .zstd => try allocator.alloc(u8, std.compress.zstd.default_window_len),
+            .deflate, .gzip => try allocator.alloc(u8, std.compress.flate.max_window_len),
+            .compress => return error.UnsupportedCompressionMethod,
+        };
+        defer if (decompress_buffer.len > 0) {
+            allocator.free(decompress_buffer);
+        };
 
-        // we can throw away the std.json.Parsed, because allocator is from an arena
-        // and everything will get cleaned on when res.deinit() is called. This
-        // presents a much simpler interface to consumers.
+        var transfer_buffer: [64]u8 = undefined;
+        var decompress: std.http.Decompress = undefined;
+        const res_reader = self.res.readerDecompressing(&transfer_buffer, &decompress, decompress_buffer);
 
-        const parsed = try std.json.parseFromTokenSource(T, allocator, &reader, opts);
+        var json_reader = std.json.Reader.init(allocator, res_reader);
+        defer json_reader.deinit();
+
+        const parsed = try std.json.parseFromTokenSource(T, allocator, &json_reader, opts);
         return zul.Managed(T).fromJson(parsed);
     }
 
-    pub fn allocBody(self: *const Response, allocator: Allocator, opts: zul.StringBuilder.FromReaderOpts) !zul.StringBuilder {
-        const str_cl = self.header("Content-Length") orelse {
-            return zul.StringBuilder.fromReader(allocator, self.req.reader(), opts);
+    pub fn allocBody(self: *Response, allocator: Allocator, opts: zul.StringBuilder.FromReaderOpts) !zul.StringBuilder {
+        const decompress_buffer: []u8 = switch (self.res.head.content_encoding) {
+            .identity => &.{},
+            .zstd => try allocator.alloc(u8, std.compress.zstd.default_window_len),
+            .deflate, .gzip => try allocator.alloc(u8, std.compress.flate.max_window_len),
+            .compress => return error.UnsupportedCompressionMethod,
+        };
+        defer if (decompress_buffer.len > 0) {
+            allocator.free(decompress_buffer);
+        };
+
+        var transfer_buffer: [64]u8 = undefined;
+        var decompress: std.http.Decompress = undefined;
+        const res_reader = self.res.readerDecompressing(&transfer_buffer, &decompress, decompress_buffer);
+
+        const str_cl = self.header("content-length") orelse {
+            return zul.StringBuilder.fromReader(allocator, res_reader, opts);
         };
 
         const cl = std.fmt.parseInt(u32, str_cl, 10) catch {
@@ -279,11 +303,7 @@ pub const Response = struct {
         const buf = try allocator.alloc(u8, cl);
         errdefer allocator.free(buf);
 
-        const n = try self.req.reader().readAll(buf);
-        if (n != cl) {
-            return error.MissingContentBasedOnContentLength;
-        }
-
+        try res_reader.readSliceAll(buf);
         return zul.StringBuilder.fromOwnedSlice(allocator, buf);
     }
 };
@@ -613,35 +633,35 @@ test "http: encodeQueryComponentLen" {
 }
 
 test "http: encodeQueryComponent" {
-    var arr = std.ArrayList(u8).init(t.allocator);
-    defer arr.deinit();
+    var arr: std.ArrayList(u8) = .empty;
+    defer arr.deinit(t.allocator);
 
     {
-        try encodeQueryComponent("", arr.writer());
+        try encodeQueryComponent("", arr.writer(t.allocator));
         try t.expectEqual("", arr.items);
     }
 
     {
         arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello_world", arr.writer());
+        try encodeQueryComponent("hello_world", arr.writer(t.allocator));
         try t.expectEqual("hello_world", arr.items);
     }
 
     {
         arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello world", arr.writer());
+        try encodeQueryComponent("hello world", arr.writer(t.allocator));
         try t.expectEqual("hello%20world", arr.items);
     }
 
     {
         arr.clearRetainingCapacity();
-        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", arr.writer());
+        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", arr.writer(t.allocator));
         try t.expectEqual("%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", arr.items);
     }
 
     {
         arr.clearRetainingCapacity();
-        try encodeQueryComponent("☺", arr.writer());
+        try encodeQueryComponent("☺", arr.writer(t.allocator));
         try t.expectEqual("%E2%98%BA", arr.items);
     }
 }
@@ -668,8 +688,10 @@ fn startTestServer() !std.Thread {
             while (true) {
                 var conn = try listener.accept();
                 defer conn.stream.close();
+                var conn_reader = conn.stream.reader(&req_buf);
+                var conn_writer = conn.stream.writer(&req_buf);
 
-                var server = std.http.Server.init(conn, &req_buf);
+                var server = std.http.Server.init(conn_reader.interface(), &conn_writer.interface);
                 var req = try server.receiveHead();
 
                 if (std.mem.eql(u8, "/stop", req.head.target) == true) {
@@ -684,11 +706,11 @@ fn startTestServer() !std.Thread {
 
                 if (std.mem.eql(u8, "/dupe_header", req.head.target) == true) {
                     try req.respond("hello", .{
-                        .keep_alive = false ,
+                        .keep_alive = false,
                         .extra_headers = &.{
-                            .{.name = "Set-Cookie", .value = "cc=11"},
-                            .{.name = "Set-Cookie", .value = "bb=22"},
-                            .{.name = "Other", .value = "value"},
+                            .{ .name = "Set-Cookie", .value = "cc=11" },
+                            .{ .name = "Set-Cookie", .value = "bb=22" },
+                            .{ .name = "Other", .value = "value" },
                         },
                     });
                     continue;
@@ -698,16 +720,22 @@ fn startTestServer() !std.Thread {
                 var headers: [10]std.http.Header = undefined;
 
                 var it = req.iterateHeaders();
+                var content_length: usize = 0;
                 while (it.next()) |hdr| {
                     const name = try allocator.alloc(u8, hdr.name.len + 4);
                     @memcpy(name[0..4], "REQ-");
                     @memcpy(name[4..], hdr.name);
-                    headers[header_count] = .{ .name = name, .value = hdr.value };
+                    headers[header_count] = .{ .name = name, .value = try allocator.dupe(u8, hdr.value) };
                     header_count += 1;
+                    if (std.mem.eql(u8, hdr.name, "content-length")) {
+                        content_length = std.fmt.parseInt(usize, hdr.value, 10) catch 0;
+                    }
                 }
 
-                const req_body = try (try req.reader()).readAllAlloc(allocator, 16_384);
-                const res = try std.json.stringifyAlloc(allocator, .{
+                var transfer_buffer: [64]u8 = undefined;
+                const body_reader = server.reader.bodyReader(&transfer_buffer, .none, content_length);
+                const req_body = try body_reader.allocRemaining(allocator, @enumFromInt(16_384));
+                const res = try std.json.Stringify.valueAlloc(allocator, .{
                     .url = req.head.target,
                     .method = req.head.method,
                     .body = req_body,

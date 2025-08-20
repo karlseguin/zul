@@ -37,7 +37,7 @@ pub fn numbers(comptime T: type, values: []T, direction: Direction) void {
 
 const t = @import("zul.zig").testing;
 test "sort: string / ascii" {
-    var values = [_][]const u8{"ABC", "abc", "Dog", "Cat", "horse", "chicken"};
+    var values = [_][]const u8{ "ABC", "abc", "Dog", "Cat", "horse", "chicken" };
     strings(&values, .asc);
     try t.expectEqual("ABC", values[0]);
     try t.expectEqual("Cat", values[1]);
@@ -72,7 +72,7 @@ test "sort: string / ascii" {
 }
 
 test "sort: numbers" {
-    var values = [_]i32{10, -20, 33, 0, 2, 6};
+    var values = [_]i32{ 10, -20, 33, 0, 2, 6 };
     numbers(i32, &values, .asc);
     try t.expectEqual(-20, values[0]);
     try t.expectEqual(0, values[1]);

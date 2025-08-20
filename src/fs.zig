@@ -13,13 +13,14 @@ pub fn readJson(comptime T: type, allocator: Allocator, file_path: []const u8, o
     };
     defer file.close();
 
-    var buffered = std.io.bufferedReader(file.deprecatedReader());
-    var reader = std.json.reader(allocator, buffered.reader());
-    defer reader.deinit();
+    var buffer: [1024]u8 = undefined;
+    var file_reader = file.reader(&buffer);
+    var json_reader = std.json.Reader.init(allocator, &file_reader.interface);
+    defer json_reader.deinit();
 
     var o = opts;
     o.allocate = .alloc_always;
-    const parsed = try std.json.parseFromTokenSource(T, allocator, &reader, o);
+    const parsed = try std.json.parseFromTokenSource(T, allocator, &json_reader, o);
     return zul.Managed(T).fromJson(parsed);
 }
 
@@ -79,11 +80,11 @@ pub const Iterator = struct {
 
         const aa = arena.allocator();
 
-        var arr = std.ArrayList(Entry).init(aa);
+        var arr: std.ArrayList(Entry) = .empty;
 
         var it = self.it;
         while (try it.next()) |entry| {
-            try arr.append(.{
+            try arr.append(aa, .{
                 .kind = entry.kind,
                 .name = try aa.dupe(u8, entry.name),
             });
