@@ -313,7 +313,7 @@ fn allocBody (
 		<div class=desc>
 			<p>Reads the body into a <code>zul.StringBuilder</code>. Consider setting the <code>max_size</code> field of <code>opts</code> to a reasonable value.</p>
 
-			<p>This method returns a <code>zul.StringBuilder</code> to support chunked-encoding responses where the length isn't known ahead of time and a growable buffer is needed. In such cases, a correctly sized <code>[]const u8</code> cannot be returned without doing an additional copy. <code>zul.StringBuilder</code> is preferred over <code>std.ArrayList(u8)</code> because of its more efficient ability to read from a <code>std.io.Reader</code>.</p>
+			<p>This method returns a <code>zul.StringBuilder</code> to support chunked-encoding responses where the length isn't known ahead of time and a growable buffer is needed. In such cases, a correctly sized <code>[]const u8</code> cannot be returned without doing an additional copy. <code>zul.StringBuilder</code> is preferred over <code>std.ArrayList(u8)</code> because of its more efficient ability to read from a <code>std.Io.Reader</code>.</p>
 		</div>
 	</div>
 <div>

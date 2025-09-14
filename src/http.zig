@@ -3,6 +3,9 @@ const zul = @import("zul.zig");
 
 const Allocator = std.mem.Allocator;
 const StringBuilder = zul.StringBuilder;
+const Writer = std.Io.Writer;
+const ArenaAllocator = std.heap.ArenaAllocator;
+const ArrayList = std.ArrayList;
 
 pub const Client = struct {
     client: std.http.Client,
@@ -19,24 +22,24 @@ pub const Client = struct {
 
     pub fn request(self: *Client, url: []const u8) !Request {
         const client = &self.client;
-        return Request.init(client.allocator, client, url);
+        return .init(client.allocator, client, url);
     }
 
     pub fn allocRequest(self: *Client, allocator: Allocator, url: []const u8) !Request {
-        return Request.init(allocator, &self.client, url);
+        return .init(allocator, &self.client, url);
     }
 };
 
 pub const Request = struct {
     _body: Body = .{ .none = {} },
     _client: *std.http.Client,
-    _arena: *std.heap.ArenaAllocator,
+    _arena: *ArenaAllocator,
     _req: ?std.http.Client.Request = null,
-    _body_writer: std.ArrayList(u8),
+    _body_writer: ArrayList(u8),
 
     url: StringBuilder,
     method: std.http.Method = .GET,
-    headers: std.ArrayList(std.http.Header),
+    headers: ArrayList(std.http.Header),
 
     const Body = union(enum) {
         none: void,
@@ -45,15 +48,15 @@ pub const Request = struct {
     };
 
     pub fn init(allocator: Allocator, client: *std.http.Client, url: []const u8) !Request {
-        const arena = try allocator.create(std.heap.ArenaAllocator);
+        const arena = try allocator.create(ArenaAllocator);
         errdefer allocator.destroy(arena);
 
-        arena.* = std.heap.ArenaAllocator.init(allocator);
+        arena.* = .init(allocator);
         errdefer arena.deinit();
 
         const aa = arena.allocator();
 
-        var url_builder = StringBuilder.init(aa);
+        var url_builder: StringBuilder = .init(aa);
         try url_builder.ensureTotalCapacity(url.len + 1);
         url_builder.writeAssumeCapacity(url);
 
@@ -77,10 +80,7 @@ pub const Request = struct {
     }
 
     pub fn deinit(self: *Request) void {
-        if (self._req) |*req| {
-            req.deinit();
-        }
-
+        if (self._req) |*req| req.deinit();
         const arena = self._arena;
         const allocator = arena.child_allocator;
         arena.deinit();
@@ -88,7 +88,10 @@ pub const Request = struct {
     }
 
     pub fn header(self: *Request, name: []const u8, value: []const u8) !void {
-        try self.headers.append(self._arena.allocator(), .{ .name = name, .value = value });
+        try self.headers.append(self._arena.allocator(), .{
+            .name = name,
+            .value = value,
+        });
     }
 
     pub fn query(self: *Request, name: []const u8, value: []const u8) !void {
@@ -99,9 +102,9 @@ pub const Request = struct {
         try url.ensureUnusedCapacity(name.len + value.len + 7);
 
         const writer = url.writer();
-        try encodeQueryComponent(name, writer);
+        try encodeQueryComponent(name, &writer);
         try url.writeByte('=');
-        try encodeQueryComponent(value, writer);
+        try encodeQueryComponent(value, &writer);
         try url.writeByte('&');
     }
 
@@ -119,17 +122,18 @@ pub const Request = struct {
 
         // +5 for random extra overhead (of encoding)
         try bw.ensureUnusedCapacity(arena, key.len + value.len + 5);
-        if (bw.items.len == 0) {
-            try self.header("Content-Type", "application/x-www-form-urlencoded");
-        } else {
+        if (bw.items.len == 0)
+            try self.header("Content-Type", "application/x-www-form-urlencoded")
+        else
             try bw.append(arena, '&');
-        }
 
-        const writer = bw.writer(arena);
-        try encodeQueryComponent(key, writer);
-        try bw.append(arena, '=');
-        try encodeQueryComponent(value, writer);
+        var aw: Writer.Allocating = .fromArrayList(arena, bw);
+        defer aw.deinit();
 
+        try encodeQueryComponent(key, &aw.writer);
+        _ = try aw.writer.write("=");
+        try encodeQueryComponent(value, &aw.writer);
+        bw.* = aw.toArrayList();
         self._body = .{ .str = bw.items };
     }
 
@@ -175,9 +179,8 @@ pub const Request = struct {
             else => {},
         }
 
-        if (content_length) |cl| {
+        if (content_length) |cl|
             req.transfer_encoding = .{ .content_length = cl };
-        }
 
         defer {
             if (file) |f| f.close();
@@ -273,7 +276,11 @@ pub const Response = struct {
         return zul.Managed(T).fromJson(parsed);
     }
 
-    pub fn allocBody(self: *Response, allocator: Allocator, opts: zul.StringBuilder.FromReaderOpts) !zul.StringBuilder {
+    pub fn allocBody(
+        self: *Response,
+        allocator: Allocator,
+        opts: zul.StringBuilder.FromReaderOpts,
+    ) !zul.StringBuilder {
         const decompress_buffer: []u8 = switch (self.res.head.content_encoding) {
             .identity => &.{},
             .zstd => try allocator.alloc(u8, std.compress.zstd.default_window_len),
@@ -633,36 +640,44 @@ test "http: encodeQueryComponentLen" {
 }
 
 test "http: encodeQueryComponent" {
-    var arr: std.ArrayList(u8) = .empty;
-    defer arr.deinit(t.allocator);
-
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
     {
-        try encodeQueryComponent("", arr.writer(t.allocator));
-        try t.expectEqual("", arr.items);
+        try encodeQueryComponent("", &aw.writer);
+        const output = try aw.toOwnedSlice();
+        defer std.testing.allocator.free(output);
+        try t.expectEqual("", output);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello_world", arr.writer(t.allocator));
-        try t.expectEqual("hello_world", arr.items);
+        try encodeQueryComponent("hello_world", &aw.writer);
+        const output = try aw.toOwnedSlice();
+        defer std.testing.allocator.free(output);
+        try t.expectEqual("hello_world", output);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("hello world", arr.writer(t.allocator));
-        try t.expectEqual("hello%20world", arr.items);
+        try encodeQueryComponent("hello world", &aw.writer);
+        const output = try aw.toOwnedSlice();
+        defer std.testing.allocator.free(output);
+        try t.expectEqual("hello%20world", output);
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", arr.writer(t.allocator));
-        try t.expectEqual("%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", arr.items);
+        try encodeQueryComponent(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", &aw.writer);
+        const output = try aw.toOwnedSlice();
+        defer std.testing.allocator.free(output);
+        try t.expectEqual(
+            "%20%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B",
+            output,
+        );
     }
 
     {
-        arr.clearRetainingCapacity();
-        try encodeQueryComponent("☺", arr.writer(t.allocator));
-        try t.expectEqual("%E2%98%BA", arr.items);
+        try encodeQueryComponent("☺", &aw.writer);
+        const output = try aw.toOwnedSlice();
+        defer std.testing.allocator.free(output);
+        try t.expectEqual("%E2%98%BA", output);
     }
 }
 
@@ -773,7 +788,7 @@ const ProgressTracker = struct {
 
 fn writeProgress(total: usize, written: usize, state: *anyopaque) void {
     std.debug.assert(total == 10043);
-    var pt: *ProgressTracker = @alignCast(@ptrCast(state));
+    var pt: *ProgressTracker = @ptrCast(@alignCast(state));
     pt.written[pt.pos] = written;
     pt.pos += 1;
 }
