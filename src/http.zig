@@ -4,8 +4,6 @@ const zul = @import("zul.zig");
 const Allocator = std.mem.Allocator;
 const StringBuilder = zul.StringBuilder;
 const Writer = std.Io.Writer;
-const ArenaAllocator = std.heap.ArenaAllocator;
-const ArrayList = std.ArrayList;
 
 pub const Client = struct {
     client: std.http.Client,
@@ -33,13 +31,13 @@ pub const Client = struct {
 pub const Request = struct {
     _body: Body = .{ .none = {} },
     _client: *std.http.Client,
-    _arena: *ArenaAllocator,
+    _arena: *std.heap.ArenaAllocator,
     _req: ?std.http.Client.Request = null,
-    _body_writer: ArrayList(u8),
+    _body_writer: std.ArrayList(u8),
 
     url: StringBuilder,
     method: std.http.Method = .GET,
-    headers: ArrayList(std.http.Header),
+    headers: std.ArrayList(std.http.Header),
 
     const Body = union(enum) {
         none: void,
@@ -48,7 +46,7 @@ pub const Request = struct {
     };
 
     pub fn init(allocator: Allocator, client: *std.http.Client, url: []const u8) !Request {
-        const arena = try allocator.create(ArenaAllocator);
+        const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
 
         arena.* = .init(allocator);
