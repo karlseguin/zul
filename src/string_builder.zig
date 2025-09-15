@@ -334,7 +334,7 @@ pub const StringBuilder = struct {
 
     pub const Writer = struct {
         sb: *StringBuilder,
-        interface: std.io.Writer,
+        interface: std.Io.Writer,
 
         pub const Error = Allocator.Error;
 
@@ -350,7 +350,7 @@ pub const StringBuilder = struct {
             };
         }
 
-        pub fn drain(io_w: *std.io.Writer, data: []const []const u8, splat: usize) error{WriteFailed}!usize {
+        pub fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) error{WriteFailed}!usize {
             _ = splat;
             const self: *Writer = @alignCast(@fieldParentPtr("interface", io_w));
             self.sb.write(data[0]) catch return error.WriteFailed;
@@ -973,7 +973,7 @@ test "StringBuilder: fromReader" {
 
     {
         // input too large
-        var reader = std.io.Reader.fixed(&buf);
+        var reader = std.Io.Reader.fixed(&buf);
         try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, &reader, .{
             .max_size = 1,
         }));
@@ -981,7 +981,7 @@ test "StringBuilder: fromReader" {
 
     {
         // input too large (just)
-        var reader = std.io.Reader.fixed(&buf);
+        var reader = std.Io.Reader.fixed(&buf);
         try t.expectEqual(error.TooBig, StringBuilder.fromReader(t.allocator, &reader, .{
             .max_size = 4999,
         }));
@@ -989,7 +989,7 @@ test "StringBuilder: fromReader" {
 
     {
         // test with larger buffer than input
-        var reader = std.io.Reader.fixed(&buf);
+        var reader = std.Io.Reader.fixed(&buf);
         const sb = try StringBuilder.fromReader(t.allocator, &reader, .{
             .buffer_size = 6000,
         });
@@ -999,7 +999,7 @@ test "StringBuilder: fromReader" {
 
     // test with different buffer sizes
     for (0..50) |_| {
-        var reader = std.io.Reader.fixed(&buf);
+        var reader = std.Io.Reader.fixed(&buf);
         const sb = try StringBuilder.fromReader(t.allocator, &reader, .{
             .buffer_size = t.Random.intRange(u16, 510, 5000),
         });

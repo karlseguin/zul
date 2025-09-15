@@ -106,7 +106,7 @@ fn fromOwnedSlice(
 fn fromReader(
 	allocator: std.mem.Allocator,
 
-	// Typically an std.io.Reader, but can be any type that has a read([]u8) !size method
+	// Typically an std.Io.Reader, but can be any type that has a read([]u8) !size method
 	reader: anytype,
 
 	// {.max_size = usize, .buffer_size = usize}
@@ -192,9 +192,9 @@ fn fromReader(
 		</div>
 	</div>
 	<div class=member>
-		<code class=name id=StringBuilder.writer><a href=#StringBuilder.writer aria-hidden=true>writer(sb: *StringBuilder) std.io.Writer</a></code>
+		<code class=name id=StringBuilder.writer><a href=#StringBuilder.writer aria-hidden=true>writer(sb: *StringBuilder) std.Io.Writer</a></code>
 		<div class=desc>
-			<p>Returns an <code>std.io.Writer</code>. This allows the <code>StringBuilder</code> to receive writes from a number of <code>std</code> and third party libraries, such as <code>std.json.stringify</code>.</p>
+			<p>Returns an <code>std.Io.Writer</code>. This allows the <code>StringBuilder</code> to receive writes from a number of <code>std</code> and third party libraries, such as <code>std.json.stringify</code>.</p>
 		</div>
 	</div>
 </div>
