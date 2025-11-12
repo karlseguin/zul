@@ -162,6 +162,7 @@ pub const Request = struct {
         self._req = try self._client.request(self.method, uri, .{
             .extra_headers = self.headers.items,
             .redirect_behavior = if (have_body) .not_allowed else @enumFromInt(5),
+            .keep_alive = false,
         });
         var req = &self._req.?;
 
