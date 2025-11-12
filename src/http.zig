@@ -18,6 +18,15 @@ pub const Client = struct {
         self.client.deinit();
     }
 
+    /// Clears the internal connection pool, freeing any cached connections and their buffers.
+    /// This can help prevent memory growth when making many requests, especially over HTTPS.
+    /// Note: This reinitializes the underlying std.http.Client, which will close all pooled connections.
+    pub fn clearConnections(self: *Client) void {
+        const allocator = self.client.allocator;
+        self.client.deinit();
+        self.client = .{ .allocator = allocator };
+    }
+
     pub fn request(self: *Client, url: []const u8) !Request {
         const client = &self.client;
         return .init(client.allocator, client, url);
@@ -162,7 +171,6 @@ pub const Request = struct {
         self._req = try self._client.request(self.method, uri, .{
             .extra_headers = self.headers.items,
             .redirect_behavior = if (have_body) .not_allowed else @enumFromInt(5),
-            .keep_alive = false,
         });
         var req = &self._req.?;
 
@@ -577,6 +585,32 @@ test "http.Request: body" {
         defer m.deinit();
         try t.expectEqual(true, std.mem.eql(u8, m.value.body, "year=%3E%3D%202000&hello=world") or
             std.mem.eql(u8, m.value.body, "hello=world&year=%3E%3D%202000"));
+    }
+}
+
+test "http.Client: clearConnections" {
+    defer t.reset();
+
+    const server_thread = try startTestServer();
+
+    var client = Client.init(t.allocator);
+    defer client.deinit();
+
+    defer shutdownTestServer(&client, server_thread);
+
+    // Make a few requests
+    for (0..3) |i| {
+        var req = try client.request("http://127.0.0.1:6370/hello");
+        defer req.deinit();
+        var res = try req.getResponse(.{});
+        const sb = try res.allocBody(t.allocator, .{});
+        defer sb.deinit();
+        try t.expectEqual("hello", sb.string());
+
+        // Clear connections after first request
+        if (i == 0) {
+            client.clearConnections();
+        }
     }
 }
 
