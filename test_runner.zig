@@ -26,6 +26,9 @@ pub fn main() !void {
     var slowest = SlowTracker.init(allocator, 5);
     defer slowest.deinit();
 
+    std.testing.io_instance = .init(allocator, .{});
+    defer std.testing.io_instance.deinit();
+
     var pass: usize = 0;
     var fail: usize = 0;
     var skip: usize = 0;
