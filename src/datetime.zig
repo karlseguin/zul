@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -270,7 +271,7 @@ pub const DateTime = struct {
 
     pub fn now() DateTime {
         return .{
-            .micros = std.time.microTimestamp(),
+            .micros = utils.time.microTimestamp(),
         };
     }
 
@@ -1116,7 +1117,7 @@ test "DateTime: initUTC" {
 
 test "DateTime: now" {
     const dt = DateTime.now();
-    try t.expectDelta(std.time.microTimestamp(), dt.micros, 100);
+    try t.expectDelta(utils.time.microTimestamp(), dt.micros, 100);
 }
 
 test "DateTime: date" {

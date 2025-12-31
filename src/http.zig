@@ -8,9 +8,9 @@ const Writer = std.Io.Writer;
 pub const Client = struct {
     client: std.http.Client,
 
-    pub fn init(allocator: Allocator) Client {
+    pub fn init(io: std.Io, allocator: Allocator) Client {
         return .{
-            .client = .{ .allocator = allocator },
+            .client = .{ .io = io, .allocator = allocator },
         };
     }
 
@@ -20,11 +20,11 @@ pub const Client = struct {
 
     pub fn request(self: *Client, url: []const u8) !Request {
         const client = &self.client;
-        return .init(client.allocator, client, url);
+        return .init(client.io, client.allocator, client, url);
     }
 
     pub fn allocRequest(self: *Client, allocator: Allocator, url: []const u8) !Request {
-        return .init(allocator, &self.client, url);
+        return .init(self.client.io, allocator, &self.client, url);
     }
 };
 
@@ -34,6 +34,7 @@ pub const Request = struct {
     _arena: *std.heap.ArenaAllocator,
     _req: ?std.http.Client.Request = null,
     _body_writer: std.ArrayList(u8),
+    _io: std.Io,
 
     url: StringBuilder,
     method: std.http.Method = .GET,
@@ -45,7 +46,7 @@ pub const Request = struct {
         file: []const u8,
     };
 
-    pub fn init(allocator: Allocator, client: *std.http.Client, url: []const u8) !Request {
+    pub fn init(io: std.Io, allocator: Allocator, client: *std.http.Client, url: []const u8) !Request {
         const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
 
@@ -74,6 +75,7 @@ pub const Request = struct {
             .url = url_builder,
             ._body_writer = .empty,
             .headers = .empty,
+            ._io = io,
         };
     }
 
@@ -166,13 +168,13 @@ pub const Request = struct {
         var req = &self._req.?;
 
         var content_length: ?usize = null;
-        var file: ?std.fs.File = null;
+        var file: ?std.Io.File = null;
         switch (self._body) {
             .str => |str| content_length = str.len,
             .file => |file_path| {
-                var f = try std.fs.cwd().openFile(file_path, .{});
+                var f = try std.Io.Dir.cwd().openFile(self._io, file_path, .{});
                 file = f;
-                content_length = (try f.stat()).size;
+                content_length = (try f.stat(self._io)).size;
             },
             else => {},
         }
@@ -181,7 +183,7 @@ pub const Request = struct {
             req.transfer_encoding = .{ .content_length = cl };
 
         defer {
-            if (file) |f| f.close();
+            if (file) |f| f.close(self._io);
         }
 
         switch (self._body) {
@@ -194,14 +196,15 @@ pub const Request = struct {
                 var req_body = try req.sendBody(&.{});
 
                 var f = file.?;
-                try f.seekTo(0);
+                // Needed?
+                // try f.seekTo(self._io, 0);
 
                 var buf: [4096]u8 = undefined;
                 const progress = opts.write_progress;
 
                 var written: usize = 0;
                 while (true) {
-                    const n = try f.read(&buf);
+                    const n = try f.readStreaming(self._io, &.{&buf});
                     if (n == 0) {
                         break;
                     }
@@ -367,7 +370,7 @@ test "http.Request: headers" {
 
     const server_thread = try startTestServer();
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.io, t.allocator);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -418,7 +421,7 @@ test "http.Request: querystring" {
 
     const server_thread = try startTestServer();
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.io, t.allocator);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -453,7 +456,7 @@ test "http.Request: body" {
 
     const server_thread = try startTestServer();
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.io, t.allocator);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -584,7 +587,7 @@ test "http.Response: body" {
 
     const server_thread = try startTestServer();
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.io, t.allocator);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -689,22 +692,22 @@ fn startTestServer() !std.Thread {
     return std.Thread.spawn(.{}, (struct {
         fn apply() !void {
             const allocator = t.arena.allocator();
-            const address = try std.net.Address.parseIp("127.0.0.1", 6370);
-            var listener = try address.listen(.{ .reuse_address = true });
+            const address = try std.Io.net.IpAddress.parse("127.0.0.1", 6370);
+            var listener = try address.listen(t.io, .{ .reuse_address = true });
 
             defer {
-                listener.deinit();
+                listener.deinit(t.io);
             }
 
             var req_buf: [1024]u8 = undefined;
 
             while (true) {
-                var conn = try listener.accept();
-                defer conn.stream.close();
-                var conn_reader = conn.stream.reader(&req_buf);
-                var conn_writer = conn.stream.writer(&req_buf);
+                var conn = try listener.accept(t.io);
+                defer conn.close(t.io);
+                var conn_reader = conn.reader(t.io, &req_buf);
+                var conn_writer = conn.writer(t.io, &req_buf);
 
-                var server = std.http.Server.init(conn_reader.interface(), &conn_writer.interface);
+                var server = std.http.Server.init(&conn_reader.interface, &conn_writer.interface);
                 var req = try server.receiveHead();
 
                 if (std.mem.eql(u8, "/stop", req.head.target) == true) {
@@ -775,7 +778,7 @@ fn testAbsoluteAndRelative(relative: []const u8) [2][]const u8 {
     const allocator = t.arena.allocator();
     return [2][]const u8{
         allocator.dupe(u8, relative) catch unreachable,
-        std.fs.cwd().realpathAlloc(allocator, relative) catch unreachable,
+        std.Io.Dir.cwd().realPathFileAlloc(t.io, relative, allocator) catch unreachable,
     };
 }
 
