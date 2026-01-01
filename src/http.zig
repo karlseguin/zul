@@ -161,6 +161,7 @@ pub const Request = struct {
             break :blk try std.Uri.parse(url);
         };
 
+        std.debug.print("Method: {}, URI: {}\n", .{ self.method, uri });
         self._req = try self._client.request(self.method, uri, .{
             .extra_headers = self.headers.items,
             .redirect_behavior = if (have_body) .not_allowed else @enumFromInt(5),
@@ -689,7 +690,7 @@ const TestEcho = struct {
 };
 
 fn startTestServer() !std.Thread {
-    return std.Thread.spawn(.{}, (struct {
+    const thr = try std.Thread.spawn(.{}, (struct {
         fn apply() !void {
             const allocator = t.arena.allocator();
             const address = try std.Io.net.IpAddress.parse("127.0.0.1", 6370);
@@ -703,6 +704,7 @@ fn startTestServer() !std.Thread {
 
             while (true) {
                 var conn = try listener.accept(t.io);
+                std.debug.print("Accepted new connection\n", .{});
                 defer conn.close(t.io);
                 var conn_reader = conn.reader(t.io, &req_buf);
                 var conn_writer = conn.writer(t.io, &req_buf);
@@ -710,8 +712,11 @@ fn startTestServer() !std.Thread {
                 var server = std.http.Server.init(&conn_reader.interface, &conn_writer.interface);
                 var req = try server.receiveHead();
 
+                std.debug.print("Path: {s}\n", .{req.head.target});
                 if (std.mem.eql(u8, "/stop", req.head.target) == true) {
+                    std.debug.print("Requested stop!\n", .{});
                     try req.respond("", .{});
+                    std.debug.print("Stopping\n", .{});
                     break;
                 }
 
@@ -764,6 +769,12 @@ fn startTestServer() !std.Thread {
             }
         }
     }).apply, .{});
+    // So, it might look terrible, but it's just to avoid a race condition where
+    // the test is already making requests even though the server has not
+    // started yet. There needs to be a better way to check this, but for now
+    // it shall do.
+    try std.Io.sleep(t.io, .fromMilliseconds(10), .real);
+    return thr;
 }
 
 fn shutdownTestServer(client: *Client, server_thread: std.Thread) void {
