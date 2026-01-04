@@ -141,7 +141,7 @@ test "pool: threadsafety" {
     t3.join();
 }
 
-fn testPool(p: *Growing(TestPoolItem, void)) void {
+fn testPool(p: *Growing(TestPoolItem, void)) !void {
     const random = t.Random.random();
 
     for (0..5000) |_| {
@@ -150,7 +150,7 @@ fn testPool(p: *Growing(TestPoolItem, void)) void {
         std.debug.assert(sb.data[0] == 0);
 
         sb.data[0] = 255;
-        std.Thread.sleep(random.uintAtMost(u32, 100000));
+        try std.Io.sleep(t.io, .fromNanoseconds(random.uintAtMost(u32, 100_000)), .real);
         sb.data[0] = 0;
         p.release(sb);
     }

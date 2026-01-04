@@ -1118,14 +1118,14 @@ test "StringBuilder.Pool: threadsafety" {
     t3.join();
 }
 
-fn testPool(p: *Pool, i: u8) void {
+fn testPool(p: *Pool, i: u8) !void {
     for (0..1000) |_| {
         var sb = p.acquire() catch unreachable;
         // no other thread should have changed this
         std.debug.assert(sb.static[0] == 0);
 
         sb.static[0] = i;
-        std.Thread.sleep(t.Random.intRange(u32, 1000, 10000));
+        try std.Io.sleep(t.io, .fromMilliseconds(t.Random.intRange(u32, 1, 10)), .real);
         // no other thread should have set this to 0
         std.debug.assert(sb.static[0] == i);
         sb.static[0] = 0;

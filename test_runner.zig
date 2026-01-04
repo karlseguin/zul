@@ -26,6 +26,9 @@ pub fn main() !void {
     var slowest = SlowTracker.init(allocator, 5);
     defer slowest.deinit();
 
+    std.testing.io_instance = .init(allocator, .{});
+    defer std.testing.io_instance.deinit();
+
     var pass: usize = 0;
     var fail: usize = 0;
     var skip: usize = 0;
@@ -93,7 +96,7 @@ pub fn main() !void {
                 fail += 1;
                 Printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
                 if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace.*);
+                    std.debug.dumpStackTrace(trace);
                 }
                 if (env.fail_first) {
                     break;
@@ -130,7 +133,7 @@ pub fn main() !void {
     Printer.fmt("\n", .{});
     try slowest.display();
     Printer.fmt("\n", .{});
-    std.posix.exit(if (fail == 0) 0 else 1);
+    std.process.exit(if (fail == 0) 0 else 1);
 }
 
 const Printer = struct {

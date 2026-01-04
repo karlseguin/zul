@@ -20,25 +20,14 @@ pub fn LockRefArenaArc(comptime T: type) type {
         @compileError("The first argument to " ++ @typeName(T) ++ ".init must be an std.mem.Allocator");
     }
 
-    var arg_fields: [full_fields.len - 1]std.builtin.Type.StructField = undefined;
+    var arg_fields: [full_fields.len - 1]type = undefined;
     inline for (full_fields[1..], 0..) |field, index| {
-        arg_fields[index] = field;
-        // shift the name down by 1
-        // so if our FullArgs is (allocator: Allocator, id: usize)
-        //                        0                      1
-        // then our Args will be (id: usize)
-        //                        0
-        arg_fields[index].name = std.fmt.comptimePrint("{d}", .{index});
+        arg_fields[index] = field.type;
     }
 
-    const Args = @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .is_tuple = true,
-            .fields = &arg_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-        },
-    });
+    const Args = @Tuple(
+        &arg_fields,
+    );
 
     return struct {
         arc: *Arc,

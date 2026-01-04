@@ -118,6 +118,8 @@ pub const expectEqualSentinel = std.testing.expectEqualSentinel;
 pub const expectApproxEqAbs = std.testing.expectApproxEqAbs;
 pub const expectApproxEqRel = std.testing.expectApproxEqRel;
 
+pub const io = std.testing.io;
+
 pub const allocator = std.testing.allocator;
 pub var arena = std.heap.ArenaAllocator.init(allocator);
 

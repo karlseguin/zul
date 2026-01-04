@@ -3,6 +3,7 @@ const std = @import("std");
 const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
 const DateTime = @import("zul.zig").DateTime;
+const utils = @import("utils.zig");
 
 fn Job(comptime T: type) type {
     return struct {
@@ -74,7 +75,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         }
 
         pub fn scheduleIn(self: *Self, task: T, ms: i64) !void {
-            return self.schedule(task, std.time.milliTimestamp() + ms);
+            return self.schedule(task, utils.time.milliTimestamp() + ms);
         }
 
         pub fn schedule(self: *Self, task: T, at: i64) !void {
@@ -145,7 +146,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
                     // yes, we must return this function with a locked mutex
                     return null;
                 };
-                const seconds_until_next = next.at - std.time.milliTimestamp();
+                const seconds_until_next = next.at - utils.time.milliTimestamp();
                 if (seconds_until_next > 0) {
                     // this job isn't ready, yes, the mutex should remain locked!
                     return seconds_until_next;
@@ -187,12 +188,12 @@ test "Scheduler: null context" {
 
     try s.scheduleIn(.{ .recorder = .{ .value = 1, .history = &history } }, 10);
     try s.scheduleAt(.{ .recorder = .{ .value = 2, .history = &history } }, try DateTime.now().add(4, .milliseconds));
-    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, std.time.milliTimestamp() + 8);
+    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, utils.time.milliTimestamp() + 8);
 
     // never gets run
     try s.scheduleAt(.{ .recorder = .{ .value = 0, .history = &history } }, try DateTime.now().add(2, .seconds));
 
-    std.Thread.sleep(std.time.ns_per_ms * 20);
+    try std.Io.sleep(t.io, .fromMilliseconds(20), .real);
     s.stop();
 
     try t.expectEqual(3, counter);
@@ -212,7 +213,7 @@ test "Scheduler: with context" {
     try s.scheduleIn(.{ .add = 2 }, 4);
     try s.scheduleIn(.{ .add = 4 }, 8);
 
-    std.Thread.sleep(std.time.ns_per_ms * 20);
+    try std.Io.sleep(t.io, .fromMilliseconds(20), .real);
     s.stop();
 
     try t.expectEqual(9, ctx);

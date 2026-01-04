@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 const fmt = std.fmt;
 const crypto = std.crypto;
@@ -25,7 +26,7 @@ pub const UUID = struct {
     }
 
     pub fn v7() UUID {
-        const ts: u64 = @intCast(std.time.milliTimestamp());
+        const ts: u64 = @intCast(utils.time.milliTimestamp());
         const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .monotonic);
         const sequence = if (ts <= last)
             @atomicRmw(u16, &clock_sequence, .Add, 1, .monotonic) + 1
