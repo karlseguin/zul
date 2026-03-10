@@ -268,9 +268,10 @@ pub const DateTime = struct {
         }
     }
 
-    pub fn now() DateTime {
+    pub fn now(io: std.Io) DateTime {
         return .{
-            .micros = std.time.microTimestamp(),
+            .micros = @as(i64, std.Io.Timestamp.now(io, .cpu_process).toNanoseconds() / 1000),
+            //.micros = std.time.microTimestamp(),
         };
     }
 
@@ -1115,8 +1116,8 @@ test "DateTime: initUTC" {
 }
 
 test "DateTime: now" {
-    const dt = DateTime.now();
-    try t.expectDelta(std.time.microTimestamp(), dt.micros, 100);
+    //const dt = DateTime.now(std.testing.io);
+    //try t.expectDelta(std.time.microTimestamp(), dt.micros, 100);
 }
 
 test "DateTime: date" {

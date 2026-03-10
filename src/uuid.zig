@@ -25,7 +25,8 @@ pub const UUID = struct {
     }
 
     pub fn v7() UUID {
-        const ts: u64 = @intCast(std.time.milliTimestamp());
+        // TODO: use std.Io.Timestamp.now but the UUID struct  no  io field ;
+        const ts: u64 = 0; // @intCast(std.Io.Timestamp.now(io: Io, clock: Clock));
         const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .monotonic);
         const sequence = if (ts <= last)
             @atomicRmw(u16, &clock_sequence, .Add, 1, .monotonic) + 1
