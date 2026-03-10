@@ -17,14 +17,16 @@ pub fn ThreadPool(comptime F: anytype) type {
         pending: usize,
         queue: []Args,
         threads: []Thread,
-        mutex: Thread.Mutex,
-        sem: Thread.Semaphore,
-        cond: Thread.Condition,
+        mutex: std.Io.Mutex,
+        sem: std.Io.Semaphore,
+        cond: std.Io.Condition,
         queue_end: usize,
+        allocator: std.mem.Allocator,
+        io: std.Io,
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, opts: Opts) !*Self {
+        pub fn init(allocator: Allocator, io: std.Io, opts: Opts) !*Self {
             const queue = try allocator.alloc(Args, opts.backlog);
             errdefer allocator.free(queue);
 
@@ -35,11 +37,13 @@ pub fn ThreadPool(comptime F: anytype) type {
             errdefer allocator.destroy(thread_pool);
 
             thread_pool.* = .{
+                .allocator = allocator,
+                .io = io,
                 .pull = 0,
                 .push = 0,
                 .pending = 0,
-                .cond = .{},
-                .mutex = .{},
+                .cond = .init,
+                .mutex = .init,
                 .stop = false,
                 .threads = threads,
                 .queue = queue,
@@ -50,7 +54,7 @@ pub fn ThreadPool(comptime F: anytype) type {
             var started: usize = 0;
             errdefer {
                 thread_pool.stop = true;
-                thread_pool.cond.broadcast();
+                thread_pool.cond.broadcast(io);
                 for (0..started) |i| {
                     threads[i].join();
                 }
@@ -64,54 +68,54 @@ pub fn ThreadPool(comptime F: anytype) type {
             return thread_pool;
         }
 
-        pub fn deinit(self: *Self, allocator: Allocator) void {
-            self.mutex.lock();
+        pub fn deinit(self: *Self) void {
+            self.mutex.lock(self.io) catch {};
             self.stop = true;
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
 
-            self.cond.broadcast();
+            self.cond.broadcast(self.io);
             for (self.threads) |thrd| {
                 thrd.join();
             }
-            allocator.free(self.threads);
-            allocator.free(self.queue);
+            self.allocator.free(self.threads);
+            self.allocator.free(self.queue);
 
-            allocator.destroy(self);
+            self.allocator.destroy(self);
         }
 
         pub fn empty(self: *Self) bool {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lock(self.io) catch {};
+            defer self.mutex.unlock(self.io);
             return self.pull == self.push;
         }
 
         pub fn spawn(self: *Self, args: Args) !void {
-            self.sem.wait();
-            self.mutex.lock();
+            try self.sem.wait(self.io);
+            try self.mutex.lock(self.io);
             const push = self.push;
             self.queue[push] = args;
             self.push = if (push == self.queue_end) 0 else push + 1;
             self.pending += 1;
-            self.mutex.unlock();
-            self.cond.signal();
+            self.mutex.unlock(self.io);
+            self.cond.signal(self.io);
         }
 
         fn worker(self: *Self) void {
             while (true) {
-                self.mutex.lock();
+                self.mutex.lock(self.io) catch {};
                 while (self.pending == 0) {
                     if (self.stop) {
-                        self.mutex.unlock();
+                        self.mutex.unlock(self.io);
                         return;
                     }
-                    self.cond.wait(&self.mutex);
+                    self.cond.wait(self.io, &self.mutex) catch {};
                 }
                 const pull = self.pull;
                 const args = self.queue[pull];
                 self.pull = if (pull == self.queue_end) 0 else pull + 1;
                 self.pending -= 1;
-                self.mutex.unlock();
-                self.sem.post();
+                self.mutex.unlock(self.io);
+                self.sem.post(self.io);
                 @call(.auto, F, args);
             }
         }
@@ -121,29 +125,31 @@ pub fn ThreadPool(comptime F: anytype) type {
 const t = @import("zul.zig").testing;
 test "ThreadPool: small fuzz" {
     testSum = 0; // global defined near the end of this file
-    var tp = try ThreadPool(testIncr).init(t.allocator, .{ .count = 3, .backlog = 3 });
+    var tp = try ThreadPool(testIncr).init(t.allocator, t.testIo, .{ .count = 3, .backlog = 3 });
 
     for (0..50_000) |_| {
         try tp.spawn(.{1});
     }
     while (tp.empty() == false) {
-        std.Thread.sleep(std.time.ns_per_ms);
+        try std.Io.sleep(t.testIo, std.Io.Duration.fromMilliseconds(1), .cpu_process);
+        //std.Thread.sleep(std.time.ns_per_ms);
     }
-    tp.deinit(t.allocator);
+    tp.deinit();
     try t.expectEqual(50_000, testSum);
 }
 
 test "ThreadPool: large fuzz" {
     testSum = 0; // global defined near the end of this file
-    var tp = try ThreadPool(testIncr).init(t.allocator, .{ .count = 50, .backlog = 1000 });
+    var tp = try ThreadPool(testIncr).init(t.allocator, t.testIo, .{ .count = 50, .backlog = 1000 });
 
     for (0..50_000) |_| {
         try tp.spawn(.{1});
     }
     while (tp.empty() == false) {
-        std.Thread.sleep(std.time.ns_per_ms);
+        try std.Io.sleep(t.testIo, std.Io.Duration.fromMilliseconds(1), .cpu_process);
+        //std.Thread.sleep(std.time.ns_per_ms);
     }
-    tp.deinit(t.allocator);
+    tp.deinit();
     try t.expectEqual(50_000, testSum);
 }
 

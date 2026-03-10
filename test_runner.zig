@@ -160,7 +160,7 @@ const SlowTracker = struct {
     const SlowestQueue = std.PriorityDequeue(TestInfo, void, compareTiming);
     max: usize,
     slowest: SlowestQueue,
-    timer: std.time.Timer,
+    timer: std.Io.Timer,
 
     fn init(allocator: Allocator, count: u32) SlowTracker {
         const timer = std.time.Timer.start() catch @panic("failed to start timer");
@@ -251,13 +251,19 @@ const Env = struct {
     }
 
     fn readEnv(allocator: Allocator, key: []const u8) ?[]const u8 {
-        const v = std.process.getEnvVarOwned(allocator, key) catch |err| {
-            if (err == error.EnvironmentVariableNotFound) {
+        const v = std.process.Environ.getAlloc(.{ .block = .global }, allocator, key) catch |err| {
+            if (err == error.EnvironmentVariableMissing) {
                 return null;
             }
             std.log.warn("failed to get env var {s} due to err {}", .{ key, err });
             return null;
         };
+
+        // const v = std.process.getEnvVarOwned(allocator, key) catch |err| {
+        //     if (err == error.EnvironmentVariableNotFound) {
+        //         return null;
+        //     }
+        // };
         return v;
     }
 

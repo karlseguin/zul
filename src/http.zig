@@ -7,10 +7,12 @@ const Writer = std.Io.Writer;
 
 pub const Client = struct {
     client: std.http.Client,
+    io: std.Io,
 
-    pub fn init(allocator: Allocator) Client {
+    pub fn init(allocator: Allocator, io: std.Io) Client {
         return .{
-            .client = .{ .allocator = allocator },
+            .io = io,
+            .client = .{ .io = io, .allocator = allocator },
         };
     }
 
@@ -20,11 +22,11 @@ pub const Client = struct {
 
     pub fn request(self: *Client, url: []const u8) !Request {
         const client = &self.client;
-        return .init(client.allocator, client, url);
+        return .init(client.allocator, self.io, client, url);
     }
 
     pub fn allocRequest(self: *Client, allocator: Allocator, url: []const u8) !Request {
-        return .init(allocator, &self.client, url);
+        return .init(allocator, self.io, &self.client, url);
     }
 };
 
@@ -32,6 +34,7 @@ pub const Request = struct {
     _body: Body = .{ .none = {} },
     _client: *std.http.Client,
     _arena: *std.heap.ArenaAllocator,
+    _io: std.Io,
     _req: ?std.http.Client.Request = null,
     _body_writer: std.ArrayList(u8),
 
@@ -45,7 +48,7 @@ pub const Request = struct {
         file: []const u8,
     };
 
-    pub fn init(allocator: Allocator, client: *std.http.Client, url: []const u8) !Request {
+    pub fn init(allocator: Allocator, io: std.Io, client: *std.http.Client, url: []const u8) !Request {
         const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
 
@@ -69,6 +72,7 @@ pub const Request = struct {
         }
 
         return .{
+            ._io = io,
             ._client = client,
             ._arena = arena,
             .url = url_builder,
@@ -166,13 +170,13 @@ pub const Request = struct {
         var req = &self._req.?;
 
         var content_length: ?usize = null;
-        var file: ?std.fs.File = null;
+        var file: ?std.Io.File = null;
         switch (self._body) {
             .str => |str| content_length = str.len,
             .file => |file_path| {
-                var f = try std.fs.cwd().openFile(file_path, .{});
+                var f = try std.Io.Dir.openFile(std.Io.Dir.cwd(), self._io, file_path, .{});
                 file = f;
-                content_length = (try f.stat()).size;
+                content_length = (try f.stat(self._io)).size;
             },
             else => {},
         }
@@ -192,16 +196,19 @@ pub const Request = struct {
             },
             .file => {
                 var req_body = try req.sendBody(&.{});
-
+                var seek_read_buf: [1024]u8 = undefined;
                 var f = file.?;
-                try f.seekTo(0);
+                try f.reader(self.io, &seek_read_buf).seekTo(0);
 
-                var buf: [4096]u8 = undefined;
+                var buf: [1024]u8 = undefined;
+                var read_buf: [4096]u8 = undefined;
                 const progress = opts.write_progress;
 
                 var written: usize = 0;
                 while (true) {
-                    const n = try f.read(&buf);
+                    var reader = f.reader(self.io, &buf);
+                    const reader_interface = &reader.interface;
+                    const n = try reader_interface.readSliceShort(self._arena, &read_buf);
                     if (n == 0) {
                         break;
                     }
@@ -365,7 +372,7 @@ const t = zul.testing;
 test "http.Request: headers" {
     defer t.reset();
 
-    const server_thread = try startTestServer();
+    const server_thread = try startTestServer(t.testIo);
 
     var client = Client.init(t.allocator);
     defer client.deinit();
@@ -416,9 +423,9 @@ test "http.Request: headers" {
 test "http.Request: querystring" {
     defer t.reset();
 
-    const server_thread = try startTestServer();
+    const server_thread = try startTestServer(t.testIo);
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.allocator, t.testIo);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -451,9 +458,9 @@ test "http.Request: querystring" {
 test "http.Request: body" {
     defer t.reset();
 
-    const server_thread = try startTestServer();
+    const server_thread = try startTestServer(t.testIo);
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.allocator, t.testIo);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -582,9 +589,9 @@ test "http.Request: body" {
 test "http.Response: body" {
     defer t.reset();
 
-    const server_thread = try startTestServer();
+    const server_thread = try startTestServer(t.testIo);
 
-    var client = Client.init(t.allocator);
+    var client = Client.init(t.allocator, t.testIo);
     defer client.deinit();
 
     defer shutdownTestServer(&client, server_thread);
@@ -685,26 +692,26 @@ const TestEcho = struct {
     body: []const u8,
 };
 
-fn startTestServer() !std.Thread {
+fn startTestServer(testThreadIo: std.Io) !std.Thread {
     return std.Thread.spawn(.{}, (struct {
-        fn apply() !void {
+        fn apply(io: std.Io) !void {
             const allocator = t.arena.allocator();
-            const address = try std.net.Address.parseIp("127.0.0.1", 6370);
-            var listener = try address.listen(.{ .reuse_address = true });
+            const address = try std.Io.net.IpAddress.parse("127.0.0.1", 6370);
+            var listener = try address.listen(io, .{ .reuse_address = true });
 
             defer {
-                listener.deinit();
+                listener.deinit(io);
             }
 
             var req_buf: [1024]u8 = undefined;
 
             while (true) {
-                var conn = try listener.accept();
-                defer conn.stream.close();
-                var conn_reader = conn.stream.reader(&req_buf);
-                var conn_writer = conn.stream.writer(&req_buf);
+                var conn = try listener.accept(io);
+                defer conn.close(io);
+                var conn_reader = conn.reader(io, &req_buf);
+                var conn_writer = conn.writer(io, &req_buf);
 
-                var server = std.http.Server.init(conn_reader.interface(), &conn_writer.interface);
+                var server = std.http.Server.init(&conn_reader.interface(), &conn_writer.interface);
                 var req = try server.receiveHead();
 
                 if (std.mem.eql(u8, "/stop", req.head.target) == true) {
@@ -760,7 +767,7 @@ fn startTestServer() !std.Thread {
                 });
             }
         }
-    }).apply, .{});
+    }).apply, .{testThreadIo});
 }
 
 fn shutdownTestServer(client: *Client, server_thread: std.Thread) void {

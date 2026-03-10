@@ -155,15 +155,16 @@ pub const Random = struct {
 
     pub fn random() std.Random {
         if (instance == null) {
-            var seed: u64 = undefined;
-            std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+            const seed: u64 = undefined;
+            // const random = xoshiro256.random().bytes(std.mem.asBytes(&seed));
+            // std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
             instance = std.Random.DefaultPrng.init(seed);
         }
         return instance.?.random();
     }
 };
-
-const t = @This();
+pub const testIo = std.testing.io;
+pub const t = @This();
 test "testing.rand: bytes" {
     defer t.reset();
     for (0..10) |_| {

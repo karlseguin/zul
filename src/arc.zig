@@ -20,7 +20,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
         @compileError("The first argument to " ++ @typeName(T) ++ ".init must be an std.mem.Allocator");
     }
 
-    var arg_fields: [full_fields.len - 1]std.builtin.Type.StructField = undefined;
+    comptime var arg_fields: [full_fields.len - 1]std.builtin.Type.StructField = undefined;
     inline for (full_fields[1..], 0..) |field, index| {
         arg_fields[index] = field;
         // shift the name down by 1
@@ -31,31 +31,40 @@ pub fn LockRefArenaArc(comptime T: type) type {
         arg_fields[index].name = std.fmt.comptimePrint("{d}", .{index});
     }
 
-    const Args = @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .is_tuple = true,
-            .fields = &arg_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-        },
-    });
+    const Args = std.builtin.Type.Struct{
+        .layout = .auto,
+        .is_tuple = true,
+        .fields = &arg_fields,
+        .decls = &[_]std.builtin.Type.Declaration{},
+    };
+
+    // const Args = @Type(.{
+    //     .@"struct" = .{
+    //         .layout = .auto,
+    //         .is_tuple = true,
+    //         .fields = &arg_fields,
+    //         .decls = &[_]std.builtin.Type.Declaration{},
+    //     },
+    // });
 
     return struct {
         arc: *Arc,
         allocator: Allocator,
-        mutex: std.Thread.Mutex,
+        io: std.Io,
+        mutex: std.Io.Mutex,
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, args: Args) !Self {
+        pub fn init(allocator: Allocator, io: std.Io, args: Args) !Self {
             return .{
-                .mutex = .{},
+                .mutex = std.Io.Mutex.init,
                 .allocator = allocator,
+                .io = io,
                 .arc = try createArc(allocator, args),
             };
         }
 
-        pub fn initWithValue(allocator: Allocator, value: T) !Self {
+        pub fn initWithValue(allocator: Allocator, io: std.Io, value: T) !Self {
             const arena = try allocator.create(ArenaAllocator);
             errdefer allocator.destroy(arena);
 
@@ -71,20 +80,21 @@ pub fn LockRefArenaArc(comptime T: type) type {
 
             return .{
                 .arc = arc,
-                .mutex = .{},
+                .mutex = std.Io.Mutex.init,
                 .allocator = allocator,
+                .io = io,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.mutex.lock();
+            self.mutex.lock(self.io);
             self.arc.release();
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
         }
 
         pub fn acquire(self: *Self) *Arc {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lock(self.io);
+            defer self.mutex.unlock(self.io);
             var arc = self.arc;
             arc.acquire();
             return arc;
@@ -92,10 +102,10 @@ pub fn LockRefArenaArc(comptime T: type) type {
 
         pub fn setValue(self: *Self, args: Args) !void {
             const arc = try createArc(self.allocator, args);
-            self.mutex.lock();
+            self.mutex.lock(self.io);
             var existing = self.arc;
             self.arc = arc;
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
             existing.release();
         }
 
@@ -162,27 +172,29 @@ pub fn LockRefArc(comptime T: type) type {
     return struct {
         arc: *Arc,
         allocator: Allocator,
-        mutex: std.Thread.Mutex,
+        io: std.Io,
+        mutex: std.Io.Mutex,
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, value: T) !Self {
+        pub fn init(allocator: Allocator, io: std.Io, value: T) !Self {
             return .{
-                .mutex = .{},
+                .mutex = std.Io.Mutex.init,
                 .allocator = allocator,
+                .io = io,
                 .arc = try createArc(allocator, value),
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.mutex.lock();
+            self.mutex.lock(self.io);
             self.arc.release();
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
         }
 
         pub fn acquire(self: *Self) *Arc {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lock(self.io);
+            defer self.mutex.unlock(self.io);
             var arc = self.arc;
             arc.acquire();
             return arc;
@@ -190,10 +202,10 @@ pub fn LockRefArc(comptime T: type) type {
 
         pub fn setValue(self: *Self, value: T) !void {
             const arc = try createArc(self.allocator, value);
-            self.mutex.lock();
+            self.mutex.lock(self.io);
             var existing = self.arc;
             self.arc = arc;
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
             existing.release();
         }
 
@@ -241,11 +253,11 @@ pub fn LockRefArc(comptime T: type) type {
 const t = @import("zul.zig").testing;
 test "LockRefArenaArc" {
     {
-        var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, .{"test"});
+        var ref = try comptime LockRefArenaArc(TestArenaValue).init(t.allocator, .{"test"});
         ref.deinit();
     }
 
-    var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, .{"hello"});
+    var ref = try comptime LockRefArenaArc(TestArenaValue).init(t.allocator, .{"hello"});
     defer ref.deinit();
 
     // keep this one around and re-test it at the end, it should still be valid
