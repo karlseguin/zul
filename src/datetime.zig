@@ -12,6 +12,16 @@ pub const Date = struct {
         rfc3339,
     };
 
+    pub const Weekday = enum(u3) {
+        Sunday = 0,
+        Monday,
+        Tuesday,
+        Wednesday,
+        Thursday,
+        Friday,
+        Saturday,
+    };
+
     pub fn init(year: i16, month: u8, day: u8) !Date {
         if (!Date.valid(year, month, day)) {
             return error.InvalidDate;
@@ -96,6 +106,26 @@ pub const Date = struct {
             inline .string, .allocated_string => |str| return Date.parse(str, .rfc3339) catch return error.InvalidCharacter,
             else => return error.UnexpectedToken,
         }
+    }
+
+    pub fn weekday(self: Date) Weekday {
+        var year: i16 = self.year;
+        var day: i16 = undefined;
+
+        if (self.month < 3) {
+            day = @as(i16, self.day) + year;
+            year -= 1;
+        } else {
+            day = @as(i16, self.day) + year - 2;
+        }
+
+        const dow = std.math.cast(u3, @mod(@divTrunc(23 * @as(i16, self.month), 9) + day + 4 + @divTrunc(year, 4) - @divTrunc(year, 100) + @divTrunc(year, 400), 7)).?;
+        return @enumFromInt(dow);
+    }
+
+    /// Returns the day of the week, eg. "Sunday"
+    pub fn weekdayName(self: Date) []const u8 {
+        return @tagName(self.weekday());
     }
 };
 
@@ -1915,6 +1945,21 @@ test "DateTime: add" {
 
         dt = try dt.add(-6, .days);
         try expectDateTime("2023-11-19T02:23:55.589434Z", dt);
+    }
+}
+
+test "Date: get week day" {
+    {
+        const date1 = try Date.parse("2025-05-25", .rfc3339);
+        try t.expectEqual("Sunday", date1.weekdayName());
+        const date2 = try Date.parse("2023-05-25", .iso8601);
+        try t.expectEqual("Thursday", date2.weekdayName());
+        const date3 = try Date.parse("1995-02-24", .rfc3339);
+        try t.expectEqual("Friday", date3.weekdayName());
+        const date4 = try Date.parse("1966-06-15", .rfc3339);
+        try t.expectEqual("Wednesday", date4.weekdayName());
+        const date5 = try Date.parse("19570728", .iso8601);
+        try t.expectEqual("Sunday", date5.weekdayName());
     }
 }
 
