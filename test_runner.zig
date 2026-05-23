@@ -14,13 +14,10 @@ const BORDER = "=" ** 80;
 // use in custom panic handler
 var current_test: ?[]const u8 = null;
 
-pub fn main() !void {
-    var mem: [8192]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&mem);
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    const allocator = fba.allocator();
-
-    const env = Env.init(allocator);
+    const env = Env.init(allocator, init.minimal.environ);
     defer env.deinit(allocator);
 
     std.testing.io_instance = .init(allocator, .{});
@@ -29,6 +26,21 @@ pub fn main() !void {
 
     var slowest = SlowTracker.init(allocator, io, 5);
     defer slowest.deinit();
+
+    var watchdog: Watchdog = .{
+        .io = io,
+        .start_ts = .now(io, Watchdog.clock),
+        .deadline_ns = .init(std.math.maxInt(i64)),
+        .shutdown = .init(false),
+    };
+    const watchdog_thread = std.Thread.spawn(.{}, Watchdog.run, .{&watchdog}) catch |err| blk: {
+        std.log.warn("watchdog spawn failed: {}", .{err});
+        break :blk null;
+    };
+    defer if (watchdog_thread) |th| {
+        watchdog.shutdown.store(true, .release);
+        th.join();
+    };
 
     var pass: usize = 0;
     var fail: usize = 0;
@@ -75,7 +87,9 @@ pub fn main() !void {
 
         current_test = friendly_name;
         std.testing.allocator_instance = .{};
+        watchdog.arm(friendly_name);
         const result = t.func();
+        watchdog.disarm();
         current_test = null;
 
         const ns_taken = slowest.endTiming(friendly_name);
@@ -150,6 +164,41 @@ const Printer = struct {
             else => {},
         }
         std.debug.print(format ++ "\x1b[0m", args);
+    }
+};
+
+const Watchdog = struct {
+    const timeout_ns: i64 = 20 * std.time.ns_per_s;
+    const poll_ms: u32 = 100;
+    const clock: std.Io.Clock = .awake;
+
+    io: std.Io,
+    start_ts: std.Io.Clock.Timestamp,
+    deadline_ns: std.atomic.Value(i64),
+    shutdown: std.atomic.Value(bool),
+    name: []const u8 = "",
+
+    fn elapsedNs(self: *Watchdog) i64 {
+        return @intCast(self.start_ts.untilNow(self.io).raw.toNanoseconds());
+    }
+
+    fn arm(self: *Watchdog, test_name: []const u8) void {
+        self.name = test_name;
+        self.deadline_ns.store(self.elapsedNs() + timeout_ns, .release);
+    }
+
+    fn disarm(self: *Watchdog) void {
+        self.deadline_ns.store(std.math.maxInt(i64), .release);
+    }
+
+    fn run(self: *Watchdog) void {
+        while (!self.shutdown.load(.acquire)) {
+            std.Io.sleep(self.io, .fromMilliseconds(poll_ms), .real) catch return;
+            if (self.elapsedNs() >= self.deadline_ns.load(.acquire)) {
+                std.debug.print("\x1b[31m\n{s}\nTIMEOUT (20s): {s}\n{s}\x1b[0m\n", .{ BORDER, self.name, BORDER });
+                std.process.exit(124);
+            }
+        }
     }
 };
 
@@ -245,11 +294,17 @@ const Env = struct {
     fail_first: bool,
     filter: ?[]const u8,
 
-    fn init(allocator: Allocator) Env {
+    fn init(allocator: Allocator, environ: std.process.Environ) Env {
+        var map = environ.createMap(std.heap.page_allocator) catch |err| {
+            std.log.warn("failed to read environment: {}", .{err});
+            return .{ .verbose = true, .fail_first = false, .filter = null };
+        };
+        defer map.deinit();
+
         return .{
-            .verbose = readEnvBool(allocator, "TEST_VERBOSE", true),
-            .fail_first = readEnvBool(allocator, "TEST_FAIL_FIRST", false),
-            .filter = readEnv(allocator, "TEST_FILTER"),
+            .verbose = readBool(map, "TEST_VERBOSE", true),
+            .fail_first = readBool(map, "TEST_FAIL_FIRST", false),
+            .filter = if (map.get("TEST_FILTER")) |v| allocator.dupe(u8, v) catch null else null,
         };
     }
 
@@ -259,21 +314,9 @@ const Env = struct {
         }
     }
 
-    fn readEnv(allocator: Allocator, key: []const u8) ?[]const u8 {
-        const v = std.process.getEnvVarOwned(allocator, key) catch |err| {
-            if (err == error.EnvironmentVariableNotFound) {
-                return null;
-            }
-            std.log.warn("failed to get env var {s} due to err {}", .{ key, err });
-            return null;
-        };
-        return v;
-    }
-
-    fn readEnvBool(allocator: Allocator, key: []const u8, deflt: bool) bool {
-        const value = readEnv(allocator, key) orelse return deflt;
-        defer allocator.free(value);
-        return std.ascii.eqlIgnoreCase(value, "true");
+    fn readBool(map: std.process.Environ.Map, key: []const u8, deflt: bool) bool {
+        const v = map.get(key) orelse return deflt;
+        return std.ascii.eqlIgnoreCase(v, "true");
     }
 };
 

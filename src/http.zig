@@ -196,21 +196,20 @@ pub const Request = struct {
                 var req_body = try req.sendBody(&.{});
 
                 var f = file.?;
-                // Needed?
-                // try f.seekTo(self._io, 0);
 
                 var buf: [4096]u8 = undefined;
                 const progress = opts.write_progress;
 
                 var written: usize = 0;
                 while (true) {
-                    const n = try f.readStreaming(self._io, &.{&buf});
-                    if (n == 0) {
-                        break;
-                    }
+                    const n = f.readStreaming(self._io, &.{&buf}) catch |err| switch (err) {
+                        error.EndOfStream => break,
+                        else => |e| return e,
+                    };
+                    if (n == 0) continue;
                     try req_body.writer.writeAll(buf[0..n]);
+                    written += n;
                     if (progress) |p| {
-                        written += n;
                         p(content_length.?, written, opts.write_progress_state);
                     }
                 }
@@ -699,13 +698,14 @@ fn startTestServer() !std.Thread {
                 listener.deinit(t.io);
             }
 
-            var req_buf: [1024]u8 = undefined;
+            var read_buf: [1024]u8 = undefined;
+            var write_buf: [1024]u8 = undefined;
 
             while (true) {
                 var conn = try listener.accept(t.io);
                 defer conn.close(t.io);
-                var conn_reader = conn.reader(t.io, &req_buf);
-                var conn_writer = conn.writer(t.io, &req_buf);
+                var conn_reader = conn.reader(t.io, &read_buf);
+                var conn_writer = conn.writer(t.io, &write_buf);
 
                 var server = std.http.Server.init(&conn_reader.interface, &conn_writer.interface);
                 var req = try server.receiveHead();

@@ -81,7 +81,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         }
 
         pub fn scheduleIn(self: *Self, task: T, ms: i64) !void {
-            return self.schedule(task, DateTime.now().micros + ms);
+            return self.schedule(task, DateTime.now().unix(.milliseconds) + ms);
         }
 
         pub fn schedule(self: *Self, task: T, at: i64) !void {
@@ -164,10 +164,10 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
                     // yes, we must return this function with a locked mutex
                     return null;
                 };
-                const seconds_until_next = next.at - DateTime.now().micros;
-                if (seconds_until_next > 0) {
+                const ms_until_next = next.at - DateTime.now().unix(.milliseconds);
+                if (ms_until_next > 0) {
                     // this job isn't ready, yes, the mutex should remain locked!
-                    return seconds_until_next;
+                    return ms_until_next;
                 }
 
                 // delete the peeked job from the queue, because we're going to process it
@@ -206,7 +206,7 @@ test "Scheduler: null context" {
 
     try s.scheduleIn(.{ .recorder = .{ .value = 1, .history = &history } }, 10);
     try s.scheduleAt(.{ .recorder = .{ .value = 2, .history = &history } }, try DateTime.now().add(4, .milliseconds));
-    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, DateTime.now().micros + 8);
+    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, DateTime.now().unix(.milliseconds) + 8);
 
     // never gets run
     try s.scheduleAt(.{ .recorder = .{ .value = 0, .history = &history } }, try DateTime.now().add(2, .seconds));
