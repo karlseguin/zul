@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 
 const fmt = std.fmt;
-const crypto = std.crypto;
+const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
 var clock_sequence: u16 = 0;
@@ -11,21 +11,21 @@ var last_timestamp: u64 = 0;
 pub const UUID = struct {
     bin: [16]u8,
 
-    pub fn seed() void {
+    pub fn seed(io: Io) void {
         var b: [2]u8 = undefined;
-        crypto.random.bytes(&b);
-        @atomicStore(u16, *clock_sequence, std.mem.readInt(u16, &b, .big), .monotonic);
+        io.random(&b);
+        @atomicStore(u16, &clock_sequence, std.mem.readInt(u16, &b, .big), .monotonic);
     }
 
-    pub fn v4() UUID {
+    pub fn v4(io: Io) UUID {
         var bin: [16]u8 = undefined;
-        crypto.random.bytes(&bin);
+        io.random(&bin);
         bin[6] = (bin[6] & 0x0f) | 0x40;
         bin[8] = (bin[8] & 0x3f) | 0x80;
         return .{ .bin = bin };
     }
 
-    pub fn v7() UUID {
+    pub fn v7(io: Io) UUID {
         const ts: u64 = @intCast(utils.time.milliTimestamp());
         const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .monotonic);
         const sequence = if (ts <= last)
@@ -47,7 +47,7 @@ pub const UUID = struct {
         bin[6] = (seq_buf[1] & 0x0f) | 0x70;
         bin[7] = seq_buf[0];
 
-        crypto.random.bytes(bin[8..]);
+        io.random(bin[8..]);
 
         //variant
         bin[8] = (bin[8] & 0x3f) | 0x80;
@@ -55,9 +55,9 @@ pub const UUID = struct {
         return .{ .bin = bin };
     }
 
-    pub fn random() UUID {
+    pub fn random(io: Io) UUID {
         var bin: [16]u8 = undefined;
-        crypto.random.bytes(&bin);
+        io.random(&bin);
         return .{ .bin = bin };
     }
 
@@ -223,7 +223,7 @@ test "uuid: v4" {
     try seen.ensureTotalCapacity(100);
 
     for (0..100) |_| {
-        const uuid = UUID.v4();
+        const uuid = UUID.v4(t.io);
         try t.expectEqual(@as(usize, 16), uuid.bin.len);
         try t.expectEqual(4, uuid.bin[6] >> 4);
         try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
@@ -240,7 +240,7 @@ test "uuid: v7" {
 
     var last: u64 = 0;
     for (0..100) |_| {
-        const uuid = UUID.v7();
+        const uuid = UUID.v7(t.io);
         try t.expectEqual(@as(usize, 16), uuid.bin.len);
         try t.expectEqual(7, uuid.bin[6] >> 4);
         try t.expectEqual(0x80, uuid.bin[8] & 0xc0);
@@ -255,7 +255,7 @@ test "uuid: v7" {
 
 test "uuid: hex" {
     for (0..20) |_| {
-        const uuid = UUID.random();
+        const uuid = UUID.random(t.io);
         const upper = uuid.toHex(.upper);
         const lower = uuid.toHex(.lower);
 
@@ -275,7 +275,7 @@ test "uuid: hex" {
 
 test "uuid: binToHex" {
     for (0..20) |_| {
-        const uuid = UUID.random();
+        const uuid = UUID.random(t.io);
         try t.expectEqual(&(try UUID.binToHex(&uuid.bin, .lower)), uuid.toHex(.lower));
     }
 }
@@ -319,7 +319,7 @@ test "uuid: format" {
 }
 
 test "uuid: eql" {
-    const uuid1 = UUID.v4();
+    const uuid1 = UUID.v4(t.io);
     const uuid2 = try UUID.parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
     const uuid3 = try UUID.parse("2a7af44c-3b7e-41f6-8764-1aff701a024a");
     const uuid4 = try UUID.parse("5cc75a16-8592-4de3-8215-89824a9c62c0");

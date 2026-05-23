@@ -158,7 +158,7 @@ pub const Random = struct {
     pub fn random() std.Random {
         if (instance == null) {
             var seed: u64 = undefined;
-            std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+            io.random(std.mem.asBytes(&seed));
             instance = std.Random.DefaultPrng.init(seed);
         }
         return instance.?.random();
