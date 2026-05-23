@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const string_builder = @This();
 
-const Mutex = std.Thread.Mutex;
+const Mutex = std.Io.Mutex;
 const Endian = std.builtin.Endian;
 const Allocator = std.mem.Allocator;
 
@@ -528,15 +528,23 @@ pub const Pool = struct {
     allocator: Allocator,
     static_size: usize,
     builders: []*StringBuilder,
+    io: std.Io,
 
-    pub fn init(allocator: Allocator, pool_size: u16, static_size: usize) !*Pool {
+    pub fn init(allocator: Allocator, io: std.Io, pool_size: u16, static_size: usize) !*Pool {
         const builders = try allocator.alloc(*StringBuilder, pool_size);
         errdefer allocator.free(builders);
 
         const pool = try allocator.create(Pool);
         errdefer allocator.destroy(pool);
 
-        pool.* = .{ .mutex = .{}, .builders = builders, .allocator = allocator, .available = pool_size, .static_size = static_size };
+        pool.* = .{
+            .mutex = .init,
+            .builders = builders,
+            .allocator = allocator,
+            .available = pool_size,
+            .static_size = static_size,
+            .io = io,
+        };
 
         var allocated: usize = 0;
         errdefer {
@@ -571,11 +579,11 @@ pub const Pool = struct {
     pub fn acquire(self: *Pool) !*StringBuilder {
         const builders = self.builders;
 
-        self.mutex.lock();
+        self.mutex.lockUncancelable(self.io);
         const available = self.available;
         if (available == 0) {
             // dont hold the lock over factory
-            self.mutex.unlock();
+            self.mutex.unlock(self.io);
 
             const allocator = self.allocator;
             const sb = try allocator.create(StringBuilder);
@@ -597,7 +605,7 @@ pub const Pool = struct {
         const index = available - 1;
         const sb = builders[index];
         self.available = index;
-        self.mutex.unlock();
+        self.mutex.unlock(self.io);
         return sb;
     }
 
@@ -621,12 +629,12 @@ pub const Pool = struct {
             sb.buf = sb.static;
         }
 
-        self.mutex.lock();
+        self.mutex.lockUncancelable(self.io);
         const available = self.available;
         var builders = self.builders;
         builders[available] = sb;
         self.available = available + 1;
-        self.mutex.unlock();
+        self.mutex.unlock(self.io);
     }
 };
 
@@ -1034,7 +1042,7 @@ test "StringBuilder: stringZ" {
 }
 
 test "StringBuilder.Pool: StringBuilder" {
-    var p = try Pool.init(t.allocator, 1, 10);
+    var p = try Pool.init(t.allocator, t.io, 1, 10);
     defer p.deinit();
 
     // This test is testing that a single StringBuilder's lifecycle through
@@ -1080,7 +1088,7 @@ test "StringBuilder.Pool: StringBuilder" {
 }
 
 test "StringBuilder.Pool: acquire and release" {
-    var p = try Pool.init(t.allocator, 2, 100);
+    var p = try Pool.init(t.allocator, t.io, 2, 100);
     defer p.deinit();
 
     const sb1a = p.acquire() catch unreachable;
@@ -1101,7 +1109,7 @@ test "StringBuilder.Pool: acquire and release" {
 }
 
 test "StringBuilder.Pool: threadsafety" {
-    var p = try Pool.init(t.allocator, 3, 20);
+    var p = try Pool.init(t.allocator, t.io, 3, 20);
     defer p.deinit();
 
     // initialize this to 0 since we're asserting that it's 0

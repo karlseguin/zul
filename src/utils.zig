@@ -50,29 +50,8 @@ pub const time = struct {
     /// before the epoch.
     /// See `posix.clock_gettime` for a POSIX timestamp.
     pub fn nanoTimestamp() i128 {
-        switch (builtin.os.tag) {
-            .windows => {
-                // RtlGetSystemTimePrecise() has a granularity of 100 nanoseconds and uses the NTFS/Windows epoch,
-                // which is 1601-01-01.
-                const epoch_adj = std.time.epoch.windows * (std.time.ns_per_s / 100);
-                return @as(i128, windows.ntdll.RtlGetSystemTimePrecise() + epoch_adj) * 100;
-            },
-            .wasi => {
-                var ns: std.os.wasi.timestamp_t = undefined;
-                const err = std.os.wasi.clock_time_get(.REALTIME, 1, &ns);
-                assert(err == .SUCCESS);
-                return ns;
-            },
-            .uefi => {
-                const value, _ = std.os.uefi.system_table.runtime_services.getTime() catch return 0;
-                return value.toEpoch();
-            },
-            else => {
-                const ts = posix.clock_gettime(.REALTIME) catch |err| switch (err) {
-                    error.UnsupportedClock, error.Unexpected => return 0, // "Precision of timing depends on hardware and OS".
-                };
-                return (@as(i128, ts.sec) * std.time.ns_per_s) + ts.nsec;
-            },
-        }
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        const io = threaded.io();
+        return std.Io.Timestamp.now(io, .real).nanoseconds;
     }
 };
