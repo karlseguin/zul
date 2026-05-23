@@ -37,7 +37,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
                 .mutex = .init,
                 .thread = null,
                 .running = false,
-                .queue = Q.init(allocator, .{}),
+                .queue = .empty,
                 .io = io,
                 .alloc = allocator,
             };
@@ -101,7 +101,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
             } else {
                 reschedule = true;
             }
-            try self.queue.add(job);
+            try self.queue.push(self.alloc, job);
 
             if (reschedule) {
                 // Our new job is scheduled before our previous earliest job
@@ -171,7 +171,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
                 }
 
                 // delete the peeked job from the queue, because we're going to process it
-                const job = self.queue.remove();
+                const job = self.queue.pop().?;
                 self.mutex.unlock(self.io);
                 defer self.mutex.lockUncancelable(self.io);
                 if (comptime include_scheduler) {
