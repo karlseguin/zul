@@ -1,5 +1,5 @@
 const std = @import("std");
-const utils = @import("utils.zig");
+const Io = std.Io;
 
 const Allocator = std.mem.Allocator;
 
@@ -300,8 +300,10 @@ pub const DateTime = struct {
     }
 
     pub fn now() DateTime {
+        var threaded: Io.Threaded = .init_single_threaded;
+        const io = threaded.io();
         return .{
-            .micros = utils.time.microTimestamp(),
+            .micros = Io.Timestamp.now(io, .real).toMicroseconds(),
         };
     }
 
@@ -1147,7 +1149,7 @@ test "DateTime: initUTC" {
 
 test "DateTime: now" {
     const dt = DateTime.now();
-    try t.expectDelta(utils.time.microTimestamp(), dt.micros, 100);
+    try t.expectDelta(Io.Timestamp.now(t.io, .real).toMicroseconds(), dt.micros, 100);
 }
 
 test "DateTime: date" {
