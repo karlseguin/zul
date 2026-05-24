@@ -118,6 +118,8 @@ pub const expectEqualSentinel = std.testing.expectEqualSentinel;
 pub const expectApproxEqAbs = std.testing.expectApproxEqAbs;
 pub const expectApproxEqRel = std.testing.expectApproxEqRel;
 
+pub const io = std.testing.io;
+
 pub const allocator = std.testing.allocator;
 pub var arena = std.heap.ArenaAllocator.init(allocator);
 
@@ -156,7 +158,7 @@ pub const Random = struct {
     pub fn random() std.Random {
         if (instance == null) {
             var seed: u64 = undefined;
-            std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+            io.random(std.mem.asBytes(&seed));
             instance = std.Random.DefaultPrng.init(seed);
         }
         return instance.?.random();

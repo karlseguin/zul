@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 
 const Allocator = std.mem.Allocator;
 
@@ -298,9 +299,9 @@ pub const DateTime = struct {
         }
     }
 
-    pub fn now() DateTime {
+    pub fn now(io: std.Io) DateTime {
         return .{
-            .micros = std.time.microTimestamp(),
+            .micros = Io.Timestamp.now(io, .real).toMicroseconds(),
         };
     }
 
@@ -1145,8 +1146,8 @@ test "DateTime: initUTC" {
 }
 
 test "DateTime: now" {
-    const dt = DateTime.now();
-    try t.expectDelta(std.time.microTimestamp(), dt.micros, 100);
+    const dt = DateTime.now(t.io);
+    try t.expectDelta(Io.Timestamp.now(t.io, .real).toMicroseconds(), dt.micros, 100);
 }
 
 test "DateTime: date" {

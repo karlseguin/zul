@@ -12,10 +12,9 @@ In your build.zig.zon add a reference to Zul:
 
 ```zig
 .{
-  .name = .your_app,
+  .name = "my-app",
   .paths = .{""},
   .version = "0.0.0",
-  .fingerprint = 0x00000000,
   .dependencies = .{
     .zul = .{
       .url = "https://github.com/karlseguin/zul/archive/master.tar.gz",
@@ -38,7 +37,9 @@ Next, in your `build.zig`, you should already have an executable, something like
 ```zig
 const exe = b.addExecutable(.{
     .name = "my-app",
-    .root_module = your_module,
+    .root_source_file = b.path("src/main.zig"),
+    .target = target,
+    .optimize = optimize,
 });
 ```
 
@@ -154,27 +155,6 @@ const managed_user = try zul.fs.readJson(User, allocator, "/tmp/data.json", .{})
 // managed_user.value is valid until managed_user.deinit() is called
 defer managed_user.deinit();
 const user = managed_user.value;
-```
-
-## [zul.fs.readLines](https://www.goblgobl.com/zul/fs/readlines/)
-Iterate over the lines in a file.
-
-```zig
-// create a buffer large enough to hold the longest valid line
-var line_buffer: [1024]u8 = undefined;
-
-// Parameters:
-// 1- an absolute or relative path to the file
-// 2- the line buffer
-// 3- options (here we're using the default)
-var it = try zul.fs.readLines("/tmp/data.txt", &line_buffer, .{});
-defer it.deinit();
-
-while (try it.next()) |line| {
-	// line is only valid until the next call to
-	// it.next() or it.deinit()
-	std.debug.print("line: {s}\n", .{line});
-}
 ```
 
 ## [zul.http.Client](https://www.goblgobl.com/zul/http/client/)

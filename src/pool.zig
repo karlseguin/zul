@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Thread = std.Thread;
+const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
 pub const GrowingOpts = struct {
@@ -10,14 +10,15 @@ pub const GrowingOpts = struct {
 pub fn Growing(comptime T: type, comptime C: type) type {
     return struct {
         _ctx: C,
+        _io: Io,
         _items: []*T,
         _available: usize,
-        _mutex: Thread.Mutex,
+        _mutex: Io.Mutex,
         _allocator: Allocator,
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, ctx: C, opts: GrowingOpts) !Self {
+        pub fn init(io: Io, allocator: Allocator, ctx: C, opts: GrowingOpts) !Self {
             const count = opts.count;
 
             const items = try allocator.alloc(*T, count);
@@ -40,7 +41,8 @@ pub fn Growing(comptime T: type, comptime C: type) type {
 
             return .{
                 ._ctx = ctx,
-                ._mutex = .{},
+                ._io = io,
+                ._mutex = .init,
                 ._items = items,
                 ._available = count,
                 ._allocator = allocator,
@@ -59,11 +61,11 @@ pub fn Growing(comptime T: type, comptime C: type) type {
         pub fn acquire(self: *Self) !*T {
             const items = self._items;
 
-            self._mutex.lock();
+            self._mutex.lockUncancelable(self._io);
             const available = self._available;
             if (available == 0) {
                 // dont hold the lock over factory
-                self._mutex.unlock();
+                self._mutex.unlock(self._io);
 
                 const allocator = self._allocator;
                 const item = try allocator.create(T);
@@ -74,7 +76,7 @@ pub fn Growing(comptime T: type, comptime C: type) type {
             const index = available - 1;
             const item = items[index];
             self._available = index;
-            self._mutex.unlock();
+            self._mutex.unlock(self._io);
             return item;
         }
 
@@ -82,24 +84,24 @@ pub fn Growing(comptime T: type, comptime C: type) type {
             item.reset();
 
             var items = self._items;
-            self._mutex.lock();
+            self._mutex.lockUncancelable(self._io);
             const available = self._available;
             if (available == items.len) {
-                self._mutex.unlock();
+                self._mutex.unlock(self._io);
                 item.deinit();
                 self._allocator.destroy(item);
                 return;
             }
             items[available] = item;
             self._available = available + 1;
-            self._mutex.unlock();
+            self._mutex.unlock(self._io);
         }
     };
 }
 
 const t = @import("zul.zig").testing;
 test "pool: acquire and release" {
-    var p = try Growing(TestPoolItem, void).init(t.allocator, {}, .{ .count = 2 });
+    var p = try Growing(TestPoolItem, void).init(t.io, t.allocator, {}, .{ .count = 2 });
     defer p.deinit();
 
     const i1a = try p.acquire();
@@ -124,7 +126,7 @@ test "pool: acquire and release" {
 }
 
 test "pool: threadsafety" {
-    var p = try Growing(TestPoolItem, void).init(t.allocator, {}, .{ .count = 3 });
+    var p = try Growing(TestPoolItem, void).init(t.io, t.allocator, {}, .{ .count = 3 });
     defer p.deinit();
 
     // initialize this to 0 since we're asserting that it's 0
@@ -141,7 +143,7 @@ test "pool: threadsafety" {
     t3.join();
 }
 
-fn testPool(p: *Growing(TestPoolItem, void)) void {
+fn testPool(p: *Growing(TestPoolItem, void)) !void {
     const random = t.Random.random();
 
     for (0..5000) |_| {
@@ -150,7 +152,7 @@ fn testPool(p: *Growing(TestPoolItem, void)) void {
         std.debug.assert(sb.data[0] == 0);
 
         sb.data[0] = 255;
-        std.Thread.sleep(random.uintAtMost(u32, 100000));
+        try std.Io.sleep(t.io, .fromNanoseconds(random.uintAtMost(u32, 100_000)), .real);
         sb.data[0] = 0;
         p.release(sb);
     }
