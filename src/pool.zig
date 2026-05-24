@@ -18,7 +18,7 @@ pub fn Growing(comptime T: type, comptime C: type) type {
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, io: Io, ctx: C, opts: GrowingOpts) !Self {
+        pub fn init(io: Io, allocator: Allocator, ctx: C, opts: GrowingOpts) !Self {
             const count = opts.count;
 
             const items = try allocator.alloc(*T, count);
@@ -101,7 +101,7 @@ pub fn Growing(comptime T: type, comptime C: type) type {
 
 const t = @import("zul.zig").testing;
 test "pool: acquire and release" {
-    var p = try Growing(TestPoolItem, void).init(t.allocator, t.io, {}, .{ .count = 2 });
+    var p = try Growing(TestPoolItem, void).init(t.io, t.allocator, {}, .{ .count = 2 });
     defer p.deinit();
 
     const i1a = try p.acquire();
@@ -126,7 +126,7 @@ test "pool: acquire and release" {
 }
 
 test "pool: threadsafety" {
-    var p = try Growing(TestPoolItem, void).init(t.allocator, t.io, {}, .{ .count = 3 });
+    var p = try Growing(TestPoolItem, void).init(t.io, t.allocator, {}, .{ .count = 3 });
     defer p.deinit();
 
     // initialize this to 0 since we're asserting that it's 0

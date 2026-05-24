@@ -21,8 +21,8 @@ pub const time = struct {
     /// The return value is signed because it is possible to have a date that is
     /// before the epoch.
     /// See `posix.clock_gettime` for a POSIX timestamp.
-    pub fn timestamp() i64 {
-        return @divFloor(milliTimestamp(), std.time.ms_per_s);
+    pub fn timestamp(io: std.Io) i64 {
+        return @divFloor(milliTimestamp(io), std.time.ms_per_s);
     }
 
     /// Get a calendar timestamp, in milliseconds, relative to UTC 1970-01-01.
@@ -30,8 +30,8 @@ pub const time = struct {
     /// The return value is signed because it is possible to have a date that is
     /// before the epoch.
     /// See `posix.clock_gettime` for a POSIX timestamp.
-    pub fn milliTimestamp() i64 {
-        return @as(i64, @intCast(@divFloor(nanoTimestamp(), std.time.ns_per_ms)));
+    pub fn milliTimestamp(io: std.Io) i64 {
+        return @as(i64, @intCast(@divFloor(nanoTimestamp(io), std.time.ns_per_ms)));
     }
 
     /// Get a calendar timestamp, in microseconds, relative to UTC 1970-01-01.
@@ -39,8 +39,8 @@ pub const time = struct {
     /// The return value is signed because it is possible to have a date that is
     /// before the epoch.
     /// See `posix.clock_gettime` for a POSIX timestamp.
-    pub fn microTimestamp() i64 {
-        return @as(i64, @intCast(@divFloor(nanoTimestamp(), std.time.ns_per_us)));
+    pub fn microTimestamp(io: std.Io) i64 {
+        return @as(i64, @intCast(@divFloor(nanoTimestamp(io), std.time.ns_per_us)));
     }
 
     /// Get a calendar timestamp, in nanoseconds, relative to UTC 1970-01-01.
@@ -49,9 +49,7 @@ pub const time = struct {
     /// The return value is signed because it is possible to have a date that is
     /// before the epoch.
     /// See `posix.clock_gettime` for a POSIX timestamp.
-    pub fn nanoTimestamp() i128 {
-        var threaded: std.Io.Threaded = .init_single_threaded;
-        const io = threaded.io();
+    pub fn nanoTimestamp(io: std.Io) i128 {
         return std.Io.Timestamp.now(io, .real).nanoseconds;
     }
 };

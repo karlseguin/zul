@@ -530,7 +530,7 @@ pub const Pool = struct {
     builders: []*StringBuilder,
     io: std.Io,
 
-    pub fn init(allocator: Allocator, io: std.Io, pool_size: u16, static_size: usize) !*Pool {
+    pub fn init(io: std.Io, allocator: Allocator, pool_size: u16, static_size: usize) !*Pool {
         const builders = try allocator.alloc(*StringBuilder, pool_size);
         errdefer allocator.free(builders);
 
@@ -1042,7 +1042,7 @@ test "StringBuilder: stringZ" {
 }
 
 test "StringBuilder.Pool: StringBuilder" {
-    var p = try Pool.init(t.allocator, t.io, 1, 10);
+    var p = try Pool.init(t.io, t.allocator, 1, 10);
     defer p.deinit();
 
     // This test is testing that a single StringBuilder's lifecycle through
@@ -1088,7 +1088,7 @@ test "StringBuilder.Pool: StringBuilder" {
 }
 
 test "StringBuilder.Pool: acquire and release" {
-    var p = try Pool.init(t.allocator, t.io, 2, 100);
+    var p = try Pool.init(t.io, t.allocator, 2, 100);
     defer p.deinit();
 
     const sb1a = p.acquire() catch unreachable;
@@ -1109,7 +1109,7 @@ test "StringBuilder.Pool: acquire and release" {
 }
 
 test "StringBuilder.Pool: threadsafety" {
-    var p = try Pool.init(t.allocator, t.io, 3, 20);
+    var p = try Pool.init(t.io, t.allocator, 3, 20);
     defer p.deinit();
 
     // initialize this to 0 since we're asserting that it's 0

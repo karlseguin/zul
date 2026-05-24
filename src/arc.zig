@@ -38,7 +38,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, io: Io, args: Args) !Self {
+        pub fn init(io: Io, allocator: Allocator, args: Args) !Self {
             return .{
                 .mutex = .init,
                 .allocator = allocator,
@@ -47,7 +47,7 @@ pub fn LockRefArenaArc(comptime T: type) type {
             };
         }
 
-        pub fn initWithValue(allocator: Allocator, io: Io, value: T) !Self {
+        pub fn initWithValue(io: Io, allocator: Allocator, value: T) !Self {
             const arena = try allocator.create(ArenaAllocator);
             errdefer allocator.destroy(arena);
 
@@ -160,7 +160,7 @@ pub fn LockRefArc(comptime T: type) type {
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, io: Io, value: T) !Self {
+        pub fn init(io: Io, allocator: Allocator, value: T) !Self {
             return .{
                 .mutex = .init,
                 .allocator = allocator,
@@ -236,11 +236,11 @@ pub fn LockRefArc(comptime T: type) type {
 const t = @import("zul.zig").testing;
 test "LockRefArenaArc" {
     {
-        var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, t.io, .{"test"});
+        var ref = try LockRefArenaArc(TestArenaValue).init(t.io, t.allocator, .{"test"});
         ref.deinit();
     }
 
-    var ref = try LockRefArenaArc(TestArenaValue).init(t.allocator, t.io, .{"hello"});
+    var ref = try LockRefArenaArc(TestArenaValue).init(t.io, t.allocator, .{"hello"});
     defer ref.deinit();
 
     // keep this one around and re-test it at the end, it should still be valid
@@ -262,7 +262,7 @@ test "LockRefArenaArc" {
 }
 
 test "LockRefArenaArc: initWithValue" {
-    var ref = try LockRefArenaArc(TestArenaValue).initWithValue(t.allocator, t.io, .{ .str = "teg" });
+    var ref = try LockRefArenaArc(TestArenaValue).initWithValue(t.io, t.allocator, .{ .str = "teg" });
     defer ref.deinit();
 
     const arc1 = ref.acquire();
@@ -272,11 +272,11 @@ test "LockRefArenaArc: initWithValue" {
 
 test "LockRefArc" {
     {
-        var ref = try LockRefArc(TestValue).init(t.allocator, t.io, .{ .str = "test" });
+        var ref = try LockRefArc(TestValue).init(t.io, t.allocator, .{ .str = "test" });
         ref.deinit();
     }
 
-    var ref = try LockRefArc(TestValue).init(t.allocator, t.io, .{ .str = "hello" });
+    var ref = try LockRefArc(TestValue).init(t.io, t.allocator, .{ .str = "hello" });
     defer ref.deinit();
 
     // keep this one around and re-test it at the end, it should still be valid

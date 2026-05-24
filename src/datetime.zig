@@ -299,9 +299,7 @@ pub const DateTime = struct {
         }
     }
 
-    pub fn now() DateTime {
-        var threaded: Io.Threaded = .init_single_threaded;
-        const io = threaded.io();
+    pub fn now(io: std.Io) DateTime {
         return .{
             .micros = Io.Timestamp.now(io, .real).toMicroseconds(),
         };
@@ -1148,7 +1146,7 @@ test "DateTime: initUTC" {
 }
 
 test "DateTime: now" {
-    const dt = DateTime.now();
+    const dt = DateTime.now(t.io);
     try t.expectDelta(Io.Timestamp.now(t.io, .real).toMicroseconds(), dt.micros, 100);
 }
 

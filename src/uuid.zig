@@ -26,7 +26,7 @@ pub const UUID = struct {
     }
 
     pub fn v7(io: Io) UUID {
-        const ts: u64 = @intCast(utils.time.milliTimestamp());
+        const ts: u64 = @intCast(utils.time.milliTimestamp(io));
         const last = @atomicRmw(u64, &last_timestamp, .Xchg, ts, .monotonic);
         const sequence = if (ts <= last)
             @atomicRmw(u16, &clock_sequence, .Add, 1, .monotonic) + 1

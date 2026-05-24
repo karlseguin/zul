@@ -31,7 +31,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 
         const Self = @This();
 
-        pub fn init(allocator: Allocator, io: Io) Self {
+        pub fn init(io: Io, allocator: Allocator) Self {
             return .{
                 .event = .unset,
                 .mutex = .init,
@@ -81,7 +81,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         }
 
         pub fn scheduleIn(self: *Self, task: T, ms: i64) !void {
-            return self.schedule(task, DateTime.now().unix(.milliseconds) + ms);
+            return self.schedule(task, DateTime.now(self.io).unix(.milliseconds) + ms);
         }
 
         pub fn schedule(self: *Self, task: T, at: i64) !void {
@@ -159,12 +159,13 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
         // and we exit this function with the mutex locked
         // importantly, we don't lock the mutex will process the task
         fn processPending(self: *Self, ctx: C) ?i64 {
+            const io = self.io;
             while (true) {
                 const next = self.queue.peek() orelse {
                     // yes, we must return this function with a locked mutex
                     return null;
                 };
-                const ms_until_next = next.at - DateTime.now().unix(.milliseconds);
+                const ms_until_next = next.at - DateTime.now(io).unix(.milliseconds);
                 if (ms_until_next > 0) {
                     // this job isn't ready, yes, the mutex should remain locked!
                     return ms_until_next;
@@ -186,7 +187,7 @@ pub fn Scheduler(comptime T: type, comptime C: type) type {
 
 const t = @import("zul.zig").testing;
 test "Scheduler: null context" {
-    var s = Scheduler(TestTask, void).init(t.allocator, t.io);
+    var s = Scheduler(TestTask, void).init(t.io, t.allocator);
     defer s.deinit();
 
     try s.start({});
@@ -196,7 +197,7 @@ test "Scheduler: null context" {
     // test that past jobs are run
     var counter: usize = 0;
     try s.scheduleIn(.{ .counter = &counter }, -200);
-    try s.scheduleAt(.{ .counter = &counter }, try DateTime.now().add(-20, .milliseconds));
+    try s.scheduleAt(.{ .counter = &counter }, try DateTime.now(t.io).add(-20, .milliseconds));
     try s.schedule(.{ .counter = &counter }, 4);
 
     var history = TestTask.History{
@@ -205,11 +206,11 @@ test "Scheduler: null context" {
     };
 
     try s.scheduleIn(.{ .recorder = .{ .value = 1, .history = &history } }, 10);
-    try s.scheduleAt(.{ .recorder = .{ .value = 2, .history = &history } }, try DateTime.now().add(4, .milliseconds));
-    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, DateTime.now().unix(.milliseconds) + 8);
+    try s.scheduleAt(.{ .recorder = .{ .value = 2, .history = &history } }, try DateTime.now(t.io).add(4, .milliseconds));
+    try s.schedule(.{ .recorder = .{ .value = 3, .history = &history } }, DateTime.now(t.io).unix(.milliseconds) + 8);
 
     // never gets run
-    try s.scheduleAt(.{ .recorder = .{ .value = 0, .history = &history } }, try DateTime.now().add(2, .seconds));
+    try s.scheduleAt(.{ .recorder = .{ .value = 0, .history = &history } }, try DateTime.now(t.io).add(2, .seconds));
 
     try std.Io.sleep(t.io, .fromMilliseconds(20), .real);
     s.stop();
@@ -222,7 +223,7 @@ test "Scheduler: null context" {
 }
 
 test "Scheduler: with context" {
-    var s = Scheduler(TestCtxTask, *usize).init(t.allocator, t.io);
+    var s = Scheduler(TestCtxTask, *usize).init(t.io, t.allocator);
     defer s.deinit();
 
     var ctx: usize = 3;
