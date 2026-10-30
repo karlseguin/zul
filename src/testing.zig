@@ -5,7 +5,8 @@ const builtin = @import("builtin");
 // when expected is frequently a comptime.
 // https://github.com/ziglang/zig/issues/4437
 pub fn expectEqual(expected: anytype, actual: anytype) !void {
-    switch (@typeInfo(@TypeOf(actual))) {
+    const type_actual: std.lang.Type = @typeInfo(@TypeOf(actual));
+    switch (type_actual) {
         .array => |arr| if (arr.child == u8) {
             return std.testing.expectEqualStrings(expected, &actual);
         },
@@ -17,8 +18,8 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
             return expectStrings(expected, actual);
         },
         .@"struct" => |structType| {
-            inline for (structType.fields) |field| {
-                try expectEqual(@field(expected, field.name), @field(actual, field.name));
+            inline for (structType.field_names) |field| {
+                try expectEqual(@field(expected, field), @field(actual, field));
             }
             return;
         },
@@ -32,9 +33,9 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
             const actualTag = @as(Tag, actual);
             try expectEqual(expectedTag, actualTag);
 
-            inline for (std.meta.fields(@TypeOf(actual))) |fld| {
+            inline for (union_info.field_names) |fld| {
                 if (std.mem.eql(u8, fld.name, @tagName(actualTag))) {
-                    try expectEqual(@field(expected, fld.name), @field(actual, fld.name));
+                    try expectEqual(@field(expected, fld), @field(actual, fld));
                     return;
                 }
             }
