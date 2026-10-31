@@ -34,7 +34,7 @@ pub fn expectEqual(expected: anytype, actual: anytype) !void {
             try expectEqual(expectedTag, actualTag);
 
             inline for (union_info.field_names) |fld| {
-                if (std.mem.eql(u8, fld.name, @tagName(actualTag))) {
+                if (std.mem.eql(u8, fld, @tagName(actualTag))) {
                     try expectEqual(@field(expected, fld), @field(actual, fld));
                     return;
                 }
@@ -209,4 +209,11 @@ test "testing: doc example" {
 
     // zul's expectEqual also works with strings.
     try t.expectEqual("hello", buf);
+}
+
+test "testing: expectEqual union" {
+    const U = union(enum) { a: u32, b: []const u8 };
+    try t.expectEqual(U{ .a = 1 }, U{ .a = 1 });
+    try t.expectEqual(U{ .b = "hello" }, U{ .b = "hello" });
+    try std.testing.expectError(error.TestExpectedEqual, t.expectEqual(U{ .a = 1 }, U{ .a = 2 }));
 }
