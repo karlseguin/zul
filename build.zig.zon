@@ -1,8 +1,7 @@
 .{
-	.name = .zul,
-	.paths = .{""},
-	.version = "0.0.0",
-	.fingerprint = 0xb06b9454b7e880d6,
-	.dependencies = .{
-	},
+    .name = .zul,
+    .paths = .{""},
+    .version = "0.0.0",
+    .fingerprint = 0xb06b9454b7e880d6,
+    .dependencies = .{},
 }

@@ -121,7 +121,7 @@ pub const Date = struct {
         }
 
         const dow = std.math.cast(u3, @mod(@divTrunc(23 * @as(i16, self.month), 9) + day + 4 + @divTrunc(year, 4) - @divTrunc(year, 100) + @divTrunc(year, 400), 7)).?;
-        return @enumFromInt(dow);
+        return @fromBackingInt(@intCast(dow));
     }
 
     /// Returns the day of the week, eg. "Sunday"

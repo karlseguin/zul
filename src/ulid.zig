@@ -22,7 +22,7 @@ const ENCODING_CHARS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 // Decoding lookup table for Crockford's Base32
 const DECODING_TABLE = blk: {
-    var table: [256]u8 = [_]u8{0xFF} ** 256;
+    var table: [256]u8 = @splat([_]u8{0xFF});
 
     // Numbers 0-9
     for (0..10) |i| {
@@ -202,7 +202,7 @@ pub const MonotonicGenerator = struct {
     pub fn init() Self {
         return Self{
             .last_timestamp = 0,
-            .last_random = [_]u8{0} ** RANDOMNESS_BYTES,
+            .last_random = @splat(0),
             .prng = std.rand.DefaultPrng.init(@intCast(time.nanoTimestamp())),
         };
     }
